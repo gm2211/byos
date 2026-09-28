@@ -1,0 +1,20 @@
+# @byos/providers
+
+Provider adapters for the bring-your-own-subscription kit. Design:
+https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
+
+- `openrouter()`, `grok()`, `groq()`, `huggingface({ clientId? })`: `ByosProvider` objects (sign-in
+  methods, live model list, streaming chat). Pass `{ appTitle }` so OpenRouter attributes usage to
+  your site. `huggingface()` offers PKCE "Sign in with Hugging Face" only when `clientId` is given
+  (see `createHuggingFaceSignIn` in huggingface-sign-in.ts), otherwise just the pasted-token path.
+- `endpointFor(provider, credential, { appTitle })`: the browser-direct base URL, headers and web
+  search mechanism for each provider.
+- `listOpenRouterModels`, `listModelsForEndpoint`, `readOpenRouterKeyInfo`: model discovery. Lists
+  always come from the provider, never a hard-coded table.
+- `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
+  its web_search tool exists.
+
+Every call here runs in the browser and talks straight to the provider (all three answer CORS). The
+token never goes to the site's own server. `claude()` talks to api.anthropic.com with an API key. Claude subscriptions are paused
+(`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`): Anthropic's terms do not let third-party apps use Claude.ai
+sign-in, so a subscription token is refused before any request. Codex uses `@byos/browser-tls`.

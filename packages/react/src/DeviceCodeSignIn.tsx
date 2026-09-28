@@ -1,0 +1,177 @@
+import { useState, type ReactNode } from 'react';
+import { ByosIcon } from './icons.js';
+
+/**
+ * Device-code subscription sign-in (Codex, Grok...): show a one-time code, send the user to the
+ * provider to approve it, wait, then show the connected state. Presentational: the site's connect
+ * hook drives `status`/`device`/`error`, and the three callbacks.
+ *
+ * TOKEN RULE: this component never sees a token. It renders what the connect flow reports.
+ */
+export type DeviceCodeStatus = 'idle' | 'pending' | 'exchanging' | 'error';
+export type DeviceCode = { deviceAuthId: string; userCode: string; verificationUriComplete: string };
+
+export type DeviceCodeSignInStrings = {
+  planName: string;
+  connectTitle: string;
+  connectBody: string;
+  connectedTitle: string;
+  connectedBody: string;
+  connectedUnavailableBody: string;
+  preparingTitle: string;
+  preparingBody: string;
+  codeTitle: string;
+  codeBody: string;
+  exchangingTitle: string;
+  exchangingBody: string;
+  unavailable: string;
+  connectButton: string;
+  retryButton: string;
+  unavailableButton: string;
+  continueButton: string;
+  codeLabel: string;
+  copied: string;
+  copyFailed: string;
+  copyCode: string;
+  waiting: string;
+  starting: string;
+  completing: string;
+  cancel: string;
+  connectedStatus: string;
+  disconnect: string;
+  troubleSummary: string;
+  troubleBody: string;
+  remember: string;
+  privacySummary: string;
+};
+
+export function defaultDeviceCodeStrings(providerName: string): DeviceCodeSignInStrings {
+  return {
+    planName: 'Subscription',
+    connectTitle: `Connect your ${providerName} account`,
+    connectBody: 'Use the subscription you already pay for.',
+    connectedTitle: 'You’re connected',
+    connectedBody: 'Your account is saved in this browser.',
+    connectedUnavailableBody: 'Your account is saved in this browser. It can’t be used right now.',
+    preparingTitle: 'Preparing your sign-in',
+    preparingBody: 'Asking for a one-time code…',
+    codeTitle: `Enter this code at ${providerName}`,
+    codeBody: 'Open the link below and enter your one-time code.',
+    exchangingTitle: 'Completing your sign-in',
+    exchangingBody: 'Finishing sign-in…',
+    unavailable: `${providerName} sign-in is unavailable right now.`,
+    connectButton: `Connect ${providerName}`,
+    retryButton: 'Try again',
+    unavailableButton: 'Sign-in unavailable',
+    continueButton: `Continue at ${providerName}`,
+    codeLabel: 'ONE-TIME CODE',
+    copied: 'Copied',
+    copyFailed: 'Copy failed — select code',
+    copyCode: 'Copy sign-in code',
+    waiting: 'Waiting for approval…',
+    starting: 'Starting sign-in…',
+    completing: 'Completing sign-in…',
+    cancel: 'Cancel sign-in',
+    connectedStatus: `${providerName} connected`,
+    disconnect: `Disconnect ${providerName}`,
+    troubleSummary: 'Having trouble signing in?',
+    troubleBody: 'Keep this tab open while you approve the code.',
+    remember: 'Remember on this browser',
+    privacySummary: 'How sign-in and privacy work',
+  };
+}
+
+function SignInCode({ code, strings }: { code: string; strings: DeviceCodeSignInStrings }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyState('copied');
+    } catch {
+      setCopyState('error');
+    }
+  }
+  return <div className="byos-signin-code">
+    <span className="byos-signin-code-label" role="status">
+      {copyState === 'copied' ? strings.copied : copyState === 'error' ? strings.copyFailed : strings.codeLabel}
+    </span>
+    <div className="byos-signin-code-row">
+      <code className="byos-signin-code-value">{code}</code>
+      <button className="byos-signin-copy" type="button" aria-label={strings.copyCode} title={copyState === 'copied' ? strings.copied : strings.copyCode} onClick={() => void copyCode()}>
+        <ByosIcon name={copyState === 'copied' ? 'check' : 'copy'}/>
+      </button>
+    </div>
+  </div>;
+}
+
+export type DeviceCodeSignInProps = {
+  providerName: string;
+  status: DeviceCodeStatus;
+  device: DeviceCode | null;
+  error?: string;
+  connected: boolean;
+  /** False when this build or policy cannot use the provider; sign-in is disabled with a notice. */
+  available?: boolean;
+  onStart: () => void;
+  onCancel: () => void;
+  onDisconnect: () => void;
+  remember?: { checked: boolean; onChange: (checked: boolean) => void; error?: string };
+  /** One short line, always visible, saying who can see what during sign-in. */
+  disclosure?: ReactNode;
+  /** Longer privacy explanation behind a disclosure toggle. */
+  privacyDetails?: ReactNode;
+  strings?: Partial<DeviceCodeSignInStrings>;
+  /** Link target for the provider approval page; `_self` suits previews. */
+  linkTarget?: '_blank' | '_self';
+  className?: string;
+};
+
+export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
+  const s = { ...defaultDeviceCodeStrings(props.providerName), ...props.strings };
+  const { status, device, error, connected } = props;
+  const available = props.available ?? true;
+  const exchanging = status === 'exchanging';
+  const pending = !connected && (status === 'pending' || exchanging);
+  const title = connected ? s.connectedTitle : pending ? exchanging ? s.exchangingTitle : device ? s.codeTitle : s.preparingTitle : s.connectTitle;
+  const body = connected ? available ? s.connectedBody : s.connectedUnavailableBody : pending ? exchanging ? s.exchangingBody : device ? s.codeBody : s.preparingBody : s.connectBody;
+  return <div className={`byos byos-signin${props.className ? ` ${props.className}` : ''}`}>
+    <header className="byos-signin-heading">
+      <span className="byos-signin-provider">{props.providerName} <span>{s.planName}</span></span>
+      <h3>{title}</h3>
+      <p>{body}</p>
+    </header>
+
+    {!available && <p className="byos-signin-unavailable" role="status">{s.unavailable}</p>}
+    {props.disclosure && <p className="byos-signin-disclosure">{props.disclosure}</p>}
+
+    {connected ? <div className="byos-signin-connected">
+      <p role="status"><ByosIcon name="check"/> {s.connectedStatus}</p>
+      <button className="byos-signin-secondary" type="button" onClick={props.onDisconnect}>{s.disconnect}</button>
+    </div> : pending ? <div className="byos-signin-device">
+      {device && !exchanging && <>
+        <SignInCode key={device.deviceAuthId} code={device.userCode} strings={s}/>
+        <a className="byos-signin-primary" href={device.verificationUriComplete} target={props.linkTarget ?? '_blank'} rel="noopener noreferrer">{s.continueButton} <ByosIcon name="external"/></a>
+      </>}
+      <div className="byos-signin-progress">
+        <p role="status"><span className="byos-signin-dot" aria-hidden="true"/>{exchanging ? s.completing : device ? s.waiting : s.starting}</p>
+        <button className="byos-signin-cancel" type="button" onClick={props.onCancel}>{s.cancel}</button>
+      </div>
+      {device && !exchanging && <details className="byos-signin-help">
+        <summary>{s.troubleSummary}</summary>
+        <p>{s.troubleBody}</p>
+      </details>}
+    </div> : <>
+      {error && <p className="byos-signin-error" role="alert">{error}</p>}
+      <button className="byos-signin-primary" type="button" disabled={!available} onClick={props.onStart}>{!available ? s.unavailableButton : status === 'error' ? s.retryButton : s.connectButton} {available && <ByosIcon name="external"/>}</button>
+    </>}
+
+    {(props.remember || props.privacyDetails) && <div className="byos-signin-storage">
+      {props.remember && <label><input type="checkbox" checked={props.remember.checked} onChange={event => props.remember!.onChange(event.target.checked)}/><span>{s.remember}</span></label>}
+      {props.remember?.error && <p className="byos-signin-storage-error" role="alert">{props.remember.error}</p>}
+      {props.privacyDetails && <details className="byos-signin-privacy">
+        <summary>{s.privacySummary}</summary>
+        {props.privacyDetails}
+      </details>}
+    </div>}
+  </div>;
+}

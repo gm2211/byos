@@ -1,0 +1,76 @@
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+
+/**
+ * The "AI" pill: shows which model and effort are in use and opens a small quick-settings popover.
+ * With nothing connected it calls `onSetup` instead. On narrow screens the popover is a bottom sheet
+ * portalled to <body>, so a site's floating headers cannot trap it under other layers.
+ */
+export type AiPillProps = {
+  connected: boolean;
+  /** e.g. "gpt-5.6-sol · low". */
+  label: string;
+  setupLabel?: string;
+  prefix?: string;
+  onSetup: () => void;
+  /** Popover content; rendered only while open, so model-list calls happen when someone looks. */
+  children: (close: () => void) => ReactNode;
+  popoverLabel?: string;
+  /** Media query that turns the popover into a bottom sheet. */
+  sheetQuery?: string;
+  className?: string;
+  classNames?: { button?: string; prefix?: string; label?: string; popover?: string; backdrop?: string };
+};
+
+function matches(query: string): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
+}
+
+export function AiPill(props: AiPillProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popoverId = useId();
+  const c = props.classNames ?? {};
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      // Portalled menus (a searchable select) mark themselves with data-floating-menu.
+      if (target && (rootRef.current?.contains(target) || popoverRef.current?.contains(target) || (target as Element).closest?.('[data-floating-menu]'))) return;
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const label = props.connected ? props.label : (props.setupLabel ?? 'Set up');
+  const close = () => setOpen(false);
+  const popover = <Popover sheetRef={popoverRef} id={popoverId} label={props.popoverLabel ?? 'Quick AI settings'} className={c.popover ?? 'byos-pill-popover'}>{props.children(close)}</Popover>;
+  return <div className={`${props.className ?? 'byos byos-pill-root'}`} ref={rootRef}>
+    <button
+      type="button"
+      className={`${c.button ?? 'byos-pill'}${props.connected ? ' connected' : ''}`}
+      aria-haspopup={props.connected ? 'dialog' : undefined}
+      aria-expanded={props.connected ? open : undefined}
+      aria-controls={props.connected && open ? popoverId : undefined}
+      aria-label={props.connected ? `AI: ${label}. Change model or effort` : 'Set up AI'}
+      onClick={() => props.connected ? setOpen(current => !current) : props.onSetup()}
+    >
+      <i/> <span className={c.prefix ?? 'byos-pill-prefix'}>{props.prefix ?? 'AI'}</span><span className={c.label ?? 'byos-pill-label'}>{label}</span>
+    </button>
+    {open && (matches(props.sheetQuery ?? '(max-width: 720px)')
+      ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, document.body)
+      : popover)}
+  </div>;
+}
+
+function Popover({ id, label, className, sheetRef, children }: { id: string; label: string; className: string; sheetRef: RefObject<HTMLDivElement>; children: ReactNode }) {
+  return <div className={className} ref={sheetRef} id={id} role="dialog" aria-label={label}>{children}</div>;
+}

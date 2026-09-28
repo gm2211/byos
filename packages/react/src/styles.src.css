@@ -1,0 +1,71 @@
+/*
+ * @byos/react default styles. Theme by setting these on :root (or any ancestor):
+ *   --byos-font, --byos-font-mono, --byos-text, --byos-muted, --byos-faint,
+ *   --byos-surface, --byos-surface-soft, --byos-surface-raised, --byos-surface-input,
+ *   --byos-line, --byos-line-strong, --byos-accent, --byos-accent-strong, --byos-on-accent,
+ *   --byos-success, --byos-warning, --byos-warning-soft, --byos-danger, --byos-radius,
+ *   --byos-radius-lg, --byos-shadow
+ * Every value below falls back to a neutral default, so an unthemed site still looks finished.
+ */
+.byos-signin { display: grid; gap: 20px; padding: 4px 0; color: $text; font: 400 14px/1.5 $font; }
+.byos-signin-heading { display: grid; gap: 8px; }
+.byos-signin .byos-signin-unavailable { padding: 10px 12px; border-left: 3px solid $warning; border-radius: 0 $radius $radius 0; background: $warning-soft; color: $text; font-size: 12px; }
+.byos-signin .byos-signin-disclosure { padding: 10px 12px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; color: $muted; font-size: 12px; line-height: 1.55; }
+.byos-signin-provider { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-weight: 600; }
+.byos-signin-provider span { color: $faint; font-size: 12px; font-weight: 400; }
+.byos-signin h3 { margin: 0; font: 600 22px/1.25 $font; letter-spacing: -.02em; }
+.byos-signin p { margin: 0; color: $muted; }
+.byos-signin .byos-signin-device { display: grid; gap: 12px; min-width: 0; }
+.byos-signin-code { display: grid; justify-items: center; gap: 8px; padding: 20px 12px; border: 1px solid $line-strong; border-radius: $radius; background: $surface-input; }
+.byos-signin-code-row { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; min-width: 0; }
+.byos-signin .byos-signin-copy { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: $radius; background: transparent; color: $muted; cursor: pointer; }
+.byos-signin .byos-signin-copy:hover { color: $accent; background: $surface-raised; }
+.byos-signin .byos-signin-code-label { color: $faint; font: 500 11px/1.5 $font-mono; letter-spacing: .1em; }
+.byos-signin .byos-signin-code-value { display: block; min-width: 0; max-width: 100%; color: $text; font: 500 clamp(22px, 5vw, 30px)/1.3 $font-mono; letter-spacing: .08em; overflow-wrap: anywhere; text-align: center; user-select: all; background: none; padding: 0; }
+.byos-signin .byos-signin-primary { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $accent; border-radius: $radius; background: $accent; color: $on-accent; font: 600 14px/1.5 $font; text-align: center; text-decoration: none; cursor: pointer; transition: background 150ms ease; }
+.byos-signin .byos-signin-primary:not(:disabled):hover { background: $accent-strong; border-color: $accent-strong; }
+.byos-signin .byos-signin-primary:disabled { border-color: $line; background: $surface-raised; color: $faint; cursor: not-allowed; }
+.byos-signin-progress { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; }
+.byos-signin-progress p, .byos-signin-connected p { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.byos-signin-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: $accent; }
+.byos-signin .byos-signin-cancel, .byos-signin .byos-signin-secondary { min-height: 44px; padding: 8px; border: 1px solid transparent; border-radius: $radius; background: transparent; color: $muted; font: 500 12px/1.5 $font; cursor: pointer; }
+.byos-signin .byos-signin-cancel:hover, .byos-signin .byos-signin-secondary:hover { color: $text; background: $surface-raised; }
+.byos-signin .byos-signin-secondary { border-color: $line-strong; padding-inline: 14px; }
+.byos-signin-connected { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.byos-signin-connected p { color: $success; }
+.byos-signin .byos-signin-error { padding: 12px; color: $danger; border: 1px solid $danger; border-radius: $radius; font-size: 13px; }
+.byos-signin-storage { padding-top: 12px; border-top: 1px solid $line; }
+.byos-signin-storage label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
+.byos-signin-storage input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: $accent; }
+.byos-signin .byos-signin-storage-error { margin: 0 0 6px; color: $danger; font-size: 12px; }
+.byos-signin summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: $muted; font-size: 12px; cursor: pointer; list-style: none; }
+.byos-signin .byos-signin-privacy { max-height: min(260px, 34dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.byos-signin-privacy > summary { position: sticky; top: 0; z-index: 1; background: $surface; }
+.byos-signin summary::-webkit-details-marker { display: none; }
+.byos-signin summary::before { content: '+'; color: $faint; font: 400 16px $font-mono; }
+.byos-signin details[open] > summary::before { content: '−'; }
+.byos-signin details p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; }
+.byos-signin :is(button, a, input, summary):focus-visible, .byos :is(button, select):focus-visible { outline: 2px solid $accent; outline-offset: 3px; }
+@media (max-width: 600px) { .byos-signin { gap: 16px; } .byos-signin h3 { font-size: 20px; } .byos-signin-code { padding-block: 16px; } }
+
+.byos-model-effort { display: grid; gap: 12px; font: 400 14px/1.5 $font; color: $text; }
+.byos-field { display: grid; gap: 6px; }
+.byos-field > span { color: $faint; font: 500 11px/1.5 $font-mono; letter-spacing: .08em; }
+.byos-field small { color: $muted; font: 400 11px $font; letter-spacing: 0; }
+.byos-select { min-height: 44px; padding: 0 10px; border: 1px solid $line-strong; border-radius: $radius; background: $surface-input; color: $text; font: inherit; }
+.byos-note { margin: 0; color: $muted; font-size: 12px; line-height: 1.5; }
+.byos-link-button { padding: 0; border: 0; background: none; color: $accent; font: inherit; text-decoration: underline; cursor: pointer; }
+
+.byos-pill-root { position: relative; display: inline-flex; }
+.byos-pill { min-height: 36px; max-width: 260px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid $line-strong; border-radius: $radius; background: $surface; color: $muted; font: 500 11px $font-mono; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+.byos-pill > i { width: 6px; height: 6px; border-radius: 50%; background: $faint; }
+.byos-pill.connected { border-color: $accent; color: $accent-strong; }
+.byos-pill.connected > i { background: $success; }
+.byos-pill-prefix { flex: none; }
+.byos-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; font: 400 12px $font; color: $text; }
+.byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid $line-strong; border-radius: $radius-lg; background: $surface; box-shadow: $shadow; color: $text; font: 400 14px/1.5 $font; text-align: left; }
+.byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: rgb(0 0 0 / .35); }
+@media (max-width: 720px) {
+  body > .byos-pill-popover { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: $radius-lg $radius-lg 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .byos-signin .byos-signin-primary { transition: none; } }

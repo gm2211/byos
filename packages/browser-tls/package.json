@@ -1,0 +1,21 @@
+{
+  "name": "@byos/browser-tls",
+  "version": "0.1.0",
+  "description": "Bring-your-own-subscription browser TLS client: rustls-in-WASM HTTPS to OpenAI over a ciphertext-only relay, so the site never sees Codex credentials.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
