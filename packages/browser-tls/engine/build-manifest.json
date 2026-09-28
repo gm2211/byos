@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "llvm": "23.1.0",
+  "rustToolchain": "1.94.1",
+  "wasmBindgen": "0.2.128",
+  "tls": "TLSv1.3",
+  "trust": "webpki-roots 1.0.9",
+  "files": {
+    "browser-tls/Cargo.toml": "685623728510f83c1c6a6f8909b4de727b16be62486b4a5c4dfb2198335bbc8b",
+    "browser-tls/Cargo.lock": "3c0d5f4b251be4a7f490e7d495fc0bbae1c2bf0403963aac2fbbe73ec417a1a9",
+    "browser-tls/src/lib.rs": "256370cfed20afc0a813e211fc98dcad5458ce8335b91613d6e978e492dd7715",
+    "scripts/build-browser-tls.sh": "6f95e22f26315f255090f67bf6d2e0f70a0cb17a88427f8339015750094dc324",
+    "scripts/verify-browser-tls-artifact.mjs": "d4d7fb3f73180e56620c1e1d6deb42b7aefdc6840393cc720b5b4e06368d6460",
+    "web/src/generated/browser-tls/motive_browser_tls.js": "ad0100f6610778e7143077e2bf79a7a3cda200b4a59888f37471ba7c6c826856",
+    "web/src/generated/browser-tls/motive_browser_tls.d.ts": "e967bd11b0b01480897376c18e15e7005590edd839864a3d8adfdbcc86055046",
+    "web/src/generated/browser-tls/motive_browser_tls_bg.wasm": "28de8f6fe35855031b50dca21f167ca90634e9c5e857ece9b80b50e860d3a60e",
+    "web/src/generated/browser-tls/motive_browser_tls_bg.wasm.d.ts": "185f93e3e857c5a9f28169f9267d62b2d683e0b2e54626645cb8febaad8d0bf3"
+  }
+}
