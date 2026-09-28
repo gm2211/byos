@@ -1,0 +1,25 @@
+{
+  "name": "@byos/codex",
+  "version": "0.1.0",
+  "description": "Bring-your-own-subscription ChatGPT (Codex) adapter: device-code sign-in, token refresh, account model list and streaming Responses chat, all over the browser-owned TLS fetch from @byos/browser-tls.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@byos/core": "file:../core",
+    "@byos/providers": "file:../providers"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

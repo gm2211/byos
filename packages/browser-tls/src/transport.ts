@@ -77,12 +77,14 @@ export type BrowserTlsModule = { BrowserTls: new (host: string) => BrowserTlsEng
 export type CodexTlsFetchOptions = {
   /** Loads the reviewed rustls WASM build; the site bundles the artifact itself. */
   loadEngine: () => Promise<BrowserTlsModule>;
-  /** The site's session token for the relay's ticket route, or null when signed out. */
-  getSession: () => { session: string; expiresAt: number } | null | undefined;
+  /** The site's session token for the relay's ticket route, or null when signed out. Omit it (with
+   * sessionHeader) when the site's session is a same-origin cookie: the ticket request then sends
+   * cookies (`credentials: 'same-origin'`) and the relay reads the session from them. */
+  getSession?: () => { session: string; expiresAt: number } | null | undefined;
   /** Must match the relay's basePath (@byos/server createCodexRelay). */
   relayBasePath: string;
-  /** Must match the relay's sessionHeader. */
-  sessionHeader: string;
+  /** Must match the relay's sessionHeader. Omit for cookie sessions (see getSession). */
+  sessionHeader?: string;
   /** Appended to the User-Agent, e.g. "Motive browser TLS". */
   clientLabel: string;
   messages?: Partial<typeof DEFAULT_MESSAGES>;
@@ -126,14 +128,18 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     if (method === 'POST') headers.set('Content-Length', String(body.length));
     const head = encoder.encode(`${method} ${url.pathname}${url.search} HTTP/1.1\r\n${Array.from(headers, ([k, v]) => `${k}: ${v}\r\n`).join('')}\r\n`);
     if (head.length > 32 * 1024) throw new CodexTransportError('This Codex request is too large.');
-    const session = options.getSession();
-    if (!session || session.expiresAt <= Date.now()) throw new CodexTransportError(messages.signIn);
+    const cookieSession = !options.getSession;
+    const session = options.getSession?.();
+    if (!cookieSession && (!session || session.expiresAt <= Date.now())) throw new CodexTransportError(messages.signIn);
     const signal = AbortSignal.any([...(init.signal ? [init.signal] : []), AbortSignal.timeout(10 * 60_000)]);
     const [tls, ticketResponse] = await Promise.all([
       options.loadEngine(),
       fetch(`${base}/ticket`, {
-        method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-        headers: { 'Content-Type': 'application/json', [options.sessionHeader]: session.session },
+        method: 'POST', credentials: cookieSession ? 'same-origin' : 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session && options.sessionHeader ? { [options.sessionHeader]: session.session } : {}),
+        },
         body: JSON.stringify({ destination }), signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
       }).catch(() => {
         signal.throwIfAborted();

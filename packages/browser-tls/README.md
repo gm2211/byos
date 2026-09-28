@@ -21,3 +21,13 @@ const codexFetch = createCodexTlsFetch({
   clientLabel: 'My Site browser TLS',
 });
 ```
+
+Sites whose session is a same-origin cookie omit `getSession` and `sessionHeader`: the ticket
+request then sends cookies and the relay reads the session from them.
+
+`engine/` holds the reviewed WASM build (copied from Motive's `web/src/generated/browser-tls/`,
+hashes in `engine/build-manifest.json`). Load it with:
+
+```ts
+loadEngine: async () => { const mod = await import('./engine/motive_browser_tls.js'); await mod.default(); return mod; }
+```
