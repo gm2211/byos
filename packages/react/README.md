@@ -8,6 +8,7 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `ModelEffortPicker`: model and effort from the provider's own list; `renderSelect` swaps in your
   own select.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
+- `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.
 - `useProviderModels`, `useEffortChoice`: headless hooks over `@byos/core`.
 
 ## Theming
