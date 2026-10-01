@@ -167,6 +167,19 @@ test('bundle mode emits a static ESM file when esbuild is installed', async (t) 
   assert.equal(await readFile(unrelatedEngine, 'utf8'), 'consumer-owned engine directory');
 });
 
+test('independent pinned exports produce byte-identical bundles without temporary paths', async (t) => {
+  try { await import('esbuild'); } catch { t.skip('esbuild is installed by the root tooling workspace'); return; }
+  const fx = await fixture();
+  t.after(() => rm(fx.root, { recursive: true, force: true }));
+  const first = await vendor(options(fx, { mode: 'bundle', out: path.join(fx.root, 'consumer-a', 'vendor') }));
+  const second = await vendor(options(fx, { mode: 'bundle', out: path.join(fx.root, 'consumer-b', 'vendor') }));
+  const firstBundle = await readFile(path.join(first.outDir, 'byos.js'), 'utf8');
+  const secondBundle = await readFile(path.join(second.outDir, 'byos.js'), 'utf8');
+  assert.equal(firstBundle, secondBundle);
+  assert.doesNotMatch(firstBundle, /byos-vendor-source-|byos-vendor-[^/]*|byos-entry\.ts/);
+  assert.doesNotMatch(firstBundle, new RegExp(fx.root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
 test('canonical path checks reject output or revision paths aliased into source', async (t) => {
   const fx = await fixture();
   t.after(() => rm(fx.root, { recursive: true, force: true }));

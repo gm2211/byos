@@ -263,7 +263,7 @@ async function copyPackage(pkg, stageDir, prefix, all, selected, includeEngine) 
   }
 }
 
-async function bundlePackages(stageDir, selected, all, bundleName) {
+async function bundlePackages(stageDir, sourceRoot, selected, all, bundleName) {
   let esbuild;
   try {
     esbuild = await import('esbuild');
@@ -272,12 +272,13 @@ async function bundlePackages(stageDir, selected, all, bundleName) {
   }
   const entries = selected.map((id) => all.get(id));
   const source = entries.map((pkg) => {
-    const index = path.join(pkg.dir, 'src', 'index.ts');
-    return `export * from ${JSON.stringify(index)};`;
+    const index = path.relative(sourceRoot, path.join(pkg.dir, 'src', 'index.ts')).split(path.sep).join('/');
+    return `export * from ${JSON.stringify(`./${index}`)};`;
   }).join('\n');
   const alias = Object.fromEntries([...all.values()].map((pkg) => [pkg.manifest.name, path.join(pkg.dir, 'src', 'index.ts')]));
   await esbuild.build({
-    stdin: { contents: source, resolveDir: process.cwd(), sourcefile: 'byos-entry.ts', loader: 'ts' },
+    absWorkingDir: sourceRoot,
+    stdin: { contents: source, resolveDir: sourceRoot, sourcefile: 'byos-entry.ts', loader: 'ts' },
     bundle: true,
     format: 'esm',
     target: 'es2022',
@@ -401,7 +402,7 @@ export async function vendor(options) {
           await validateEngine(engineDir);
         }
       } else {
-        await bundlePackages(stageDir, selected, all, options.bundleName);
+        await bundlePackages(stageDir, pinnedSource, selected, all, options.bundleName);
         if (options.engine === 'include') {
           const engineDir = path.join(all.get('browser-tls').dir, 'engine');
           await cp(engineDir, path.join(stageDir, 'engine'), { recursive: true });
