@@ -62,18 +62,7 @@ Import `@byos/react/styles.css` once, then scope CSS tokens to your application 
 }
 ```
 
-On mobile, `AiPill` portals its sheet. If the variables are scoped to `.my-app`, use a portal target under that themed ancestor and outside clipped content. A callback state ref supplies the target after mount; this avoids passing `null` to the pill on its first render. The package's mobile positioning selector targets a direct child of `body`, so this scoped target also needs the positioning rule below.
-
-```css
-.my-app-ai-portal { display: contents; }
-@media (max-width: 720px) {
-  .my-app-ai-portal .byos-pill-popover {
-    position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-    border-radius: var(--byos-radius-lg, 14px) var(--byos-radius-lg, 14px) 0 0;
-  }
-}
-```
+On mobile, `AiPill` portals its sheet. If the variables are scoped to `.my-app`, use a portal target under that themed ancestor and outside clipped content. A callback state ref supplies the target after mount; this avoids passing `null` to the pill on its first render. The package applies sheet positioning whenever its `sheetQuery` matches, including when the sheet is rendered into a custom portal root.
 
 ```tsx
 import { useState } from 'react';
