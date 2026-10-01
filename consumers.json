@@ -1,0 +1,29 @@
+{
+  "motive": {
+    "repository": "gm2211/motive",
+    "mode": "packages",
+    "packages": [
+      "core",
+      "providers",
+      "react",
+      "browser-tls",
+      "server"
+    ],
+    "output": "shared",
+    "namePrefix": "byos-",
+    "revision": "shared/BYOS_REVISION",
+    "engine": "omit"
+  },
+  "tracked": {
+    "repository": "gm2211/tracked",
+    "mode": "bundle",
+    "packages": [
+      "core",
+      "providers",
+      "codex",
+      "browser-tls"
+    ],
+    "output": "src/tracked/app/static/vendor/byos",
+    "engine": "include"
+  }
+}

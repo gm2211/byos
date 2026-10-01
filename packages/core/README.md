@@ -17,4 +17,6 @@ A provider token may cross the site's backend once, only to finish sign-in, and 
 After that it lives only in the browser and every model call goes browser to provider. Nothing in
 this package sends a stored token anywhere; keep it that way.
 
-Every site passes its own `prefix`, so two sites on one origin never read each other's tokens.
+Every site passes its own non-empty `prefix` (up to 128 characters), so two sites on one origin
+never read each other's tokens. Replacing a credential clears any old refresh grant; store a matching
+new grant explicitly with `storeRefresh`.

@@ -1,5 +1,5 @@
 import { isReasoningEffort, type EffortOption, type ReasoningEffort } from './effort.js';
-import { resolveStorage, safeGet, safeSet, type ByosStorage } from './storage.js';
+import { requireStoragePrefix, resolveStorage, safeGet, safeSet, type ByosStorage } from './storage.js';
 
 /**
  * A provider's model list as the picker shows it. Lists always come from the provider; this cache
@@ -53,7 +53,8 @@ export function parseModelCatalog(raw: string | null): CatalogModel[] | undefine
 export type ModelCatalogCache = ReturnType<typeof createModelCatalogCache>;
 
 export function createModelCatalogCache(options: { prefix: string; storage?: ByosStorage }) {
-  const key = (provider: string) => `${options.prefix}${provider}`;
+  const prefix = requireStoragePrefix(options.prefix);
+  const key = (provider: string) => `${prefix}${provider}`;
   return {
     read(provider: string): CatalogModel[] | undefined {
       return parseModelCatalog(safeGet(resolveStorage(options.storage).local, key(provider)));

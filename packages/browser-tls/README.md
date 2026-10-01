@@ -8,9 +8,9 @@ account-catalog and Responses routes. It runs TLS 1.3 inside the page (rustls co
 certificate-checked against webpki roots) and sends only ciphertext through the site's relay
 (`@byos/server` `createCodexRelay`). The site never sees tokens, headers or bodies.
 
-The WASM engine is built from Motive's `browser-tls/` crate by `scripts/build-browser-tls.sh`, with
-hashes pinned in `web/src/generated/browser-tls/build-manifest.json`. A site bundles that reviewed
-artifact and passes a loader:
+The Rust source lives in `rust/`; `scripts/build-engine.sh [OUTPUT_DIR]` builds the pinned engine
+from this repository. `engine/build-manifest.json` binds the reviewed binary to source hashes.
+A site bundles that reviewed artifact and passes a loader:
 
 ```ts
 const codexFetch = createCodexTlsFetch({
@@ -23,11 +23,19 @@ const codexFetch = createCodexTlsFetch({
 ```
 
 Sites whose session is a same-origin cookie omit `getSession` and `sessionHeader`: the ticket
-request then sends cookies and the relay reads the session from them.
+request then sends cookies and the relay reads the session from them. Configure the relay with
+`readSession(request)` to read and validate that cookie. Header mode requires both `getSession` and
+`sessionHeader`; cookie mode omits both. The relay path must be a same-origin absolute path such as
+`/api/ai/codex-tunnel`. External URLs, query strings, fragments, repeated slashes, and traversal
+segments are rejected before a request or TLS engine load.
 
-`engine/` holds the reviewed WASM build (copied from Motive's `web/src/generated/browser-tls/`,
-hashes in `engine/build-manifest.json`). Load it with:
+The transport's `messages.relayUnavailable` option controls the safe user-facing text for relay
+HTTP 503 responses. The default avoids app-specific wording; a site can provide its own recovery
+instructions.
+
+`engine/` holds the reviewed WASM build (originally imported from Motive,
+hashes in `engine/build-manifest.json` and verified against `rust/`). Load it with:
 
 ```ts
-loadEngine: async () => { const mod = await import('./engine/motive_browser_tls.js'); await mod.default(); return mod; }
+loadEngine: async () => { const mod = await import('@byos/browser-tls/engine/motive_browser_tls.js'); await mod.default(); return mod; }
 ```

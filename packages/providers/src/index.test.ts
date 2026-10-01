@@ -47,22 +47,49 @@ test('chat streams text, reasoning and usage, and sends the token only to the pr
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.groq.com/openai/v1/chat/completions');
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer secret');
+  assert.equal(calls[0].init?.redirect, 'error');
   assert.equal(JSON.parse(String(calls[0].init?.body)).reasoning_effort, 'low');
 });
 
-test('chat surfaces a provider refusal with its status', async () => {
-  fakeFetch(() => new Response(JSON.stringify({ code: 'x', error: 'Incorrect API key' }), { status: 401 }));
+test('chat surfaces a provider refusal with its status and redacts an echoed credential', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ code: 'x', error: 'Incorrect API key: bad-secret' }), { status: 401 }));
   await assert.rejects(async () => {
-    for await (const _ of streamChatCompletions(endpointFor('xai', 'bad'), { model: 'm', messages: [] })) { /* drain */ }
-  }, (error: Error & { status?: number }) => error.message === 'Incorrect API key' && error.status === 401);
+    for await (const _ of streamChatCompletions(endpointFor('xai', 'bad-secret'), { model: 'm', messages: [] })) { /* drain */ }
+  }, (error: Error & { status?: number }) => error.message === 'Incorrect API key: [redacted]' && error.status === 401);
+});
+
+test('chat cancels provider stream when consumer stops early', async () => {
+  let canceled = false;
+  globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"first"}}]}\n\n'));
+    },
+    cancel() { canceled = true; },
+  }))) as typeof fetch;
+  for await (const _event of streamChatCompletions(endpointFor('groq', 'key'), { model: 'm', messages: [] })) break;
+  assert.equal(canceled, true);
 });
 
 test('model lists come from the provider', async () => {
-  fakeFetch(({ url }) => url.endsWith('/models') && url.includes('x.ai')
+  const calls = fakeFetch(({ url }) => url.endsWith('/models') && url.includes('x.ai')
     ? new Response(JSON.stringify({ data: [{ id: 'grok-b' }, { id: 'grok-a', name: 'Grok A' }] }))
     : new Response(JSON.stringify({ data: [{ id: 'good', name: 'GPT-5.6', supported_parameters: ['tools'] }, { id: 'no-tools' }] })));
   assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-a', name: 'Grok A' }, { id: 'grok-b', name: 'grok-b' }]);
   assert.deepEqual(await openrouter().listModels('k'), [{ id: 'good', name: 'GPT-5.6', recommended: true }]);
+  assert.ok(calls.every(call => call.init?.redirect === 'error'));
+});
+
+test('provider model discovery forwards cancellation signal', async () => {
+  const calls = fakeFetch(() => new Response(JSON.stringify({ data: [{ id: 'm' }] })));
+  const controller = new AbortController();
+  await groq().listModels('k', controller.signal);
+  assert.equal(calls[0].init?.signal, controller.signal);
+  assert.equal(calls[0].init?.redirect, 'error');
+});
+
+test('model discovery redacts credentials echoed in provider errors', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ error: { message: 'Rejected secret-key' } }), { status: 401 }));
+  await assert.rejects(() => grok().listModels('secret-key'), /Rejected \[redacted\]/);
 });
 
 test('sign-in methods disclose when the site server is involved', () => {
@@ -89,6 +116,7 @@ test('Claude: API key only while subscriptions are paused; models and effort com
   assert.deepEqual(await claude().listModels('sk-ant-api03-x'), [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5', reasoningEfforts: [{ effort: 'low' }, { effort: 'max' }] }]);
   assert.equal(calls[0].url.startsWith('https://api.anthropic.com/v1/models'), true);
   assert.equal((calls[0].init?.headers as Record<string, string>)['anthropic-dangerous-direct-browser-access'], 'true');
+  assert.equal(calls[0].init?.redirect, 'error');
   await assert.rejects(() => claude().listModels('sk-ant-oat01-x'), (error: Error) => error.message === CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE);
   assert.equal(calls.length, 1);
 });
@@ -106,6 +134,7 @@ test('Claude streams text, thinking and usage from the Messages API', async () =
   assert.deepEqual(events, [
     { type: 'reasoning', text: 'hmm' }, { type: 'text', text: 'Hi' }, { type: 'usage', inputTokens: 9, outputTokens: 4 }, { type: 'done' },
   ]);
+  assert.equal(calls[0].init?.redirect, 'error');
   const body = JSON.parse(String(calls[0].init?.body));
   assert.equal(body.system, 'be brief');
   assert.deepEqual(body.messages, [{ role: 'user', content: 'hi' }]);

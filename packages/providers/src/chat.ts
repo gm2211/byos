@@ -25,6 +25,17 @@ export function providerErrorText(payload: unknown): string | undefined {
   return undefined;
 }
 
+export function redactProviderSecrets(text: string, secrets: readonly (string | undefined)[]): string {
+  let safe = text;
+  for (const secret of secrets) if (secret) safe = safe.split(secret).join('[redacted]');
+  return safe;
+}
+
+export function safeProviderErrorText(payload: unknown, credential: string): string | undefined {
+  const text = providerErrorText(payload);
+  return text ? redactProviderSecrets(text, [credential]) : undefined;
+}
+
 type ChunkDelta = { content?: unknown; reasoning?: unknown; reasoning_content?: unknown };
 type Chunk = {
   choices?: Array<{ delta?: ChunkDelta }>;
@@ -43,6 +54,7 @@ export async function* streamChatCompletions(endpoint: CloudEndpoint, request: C
   const response = await fetch(`${endpoint.baseUrl}/chat/completions`, {
     method: 'POST',
     signal: request.signal,
+    redirect: 'error',
     headers: { Authorization: `Bearer ${endpoint.apiKey}`, 'Content-Type': 'application/json', ...endpoint.headers },
     body: JSON.stringify({
       model: request.model,
@@ -54,21 +66,27 @@ export async function* streamChatCompletions(endpoint: CloudEndpoint, request: C
   });
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => undefined);
-    throw new ProviderRequestError(providerErrorText(payload) ?? `The provider answered ${response.status}.`, response.status);
+    throw new ProviderRequestError(safeProviderErrorText(payload, endpoint.apiKey) ?? `The provider answered ${response.status}.`, response.status);
   }
-  for await (const event of iterateSseEvents(response.body.getReader())) {
-    if (event.type !== 'data') continue;
-    let chunk: Chunk;
-    try { chunk = JSON.parse(event.data) as Chunk; } catch { continue; }
-    const error = providerErrorText(chunk);
-    if (error) throw new ProviderRequestError(error, 200);
-    const delta = chunk.choices?.[0]?.delta;
-    const reasoning = delta?.reasoning ?? delta?.reasoning_content;
-    if (typeof reasoning === 'string' && reasoning) yield { type: 'reasoning', text: reasoning };
-    if (typeof delta?.content === 'string' && delta.content) yield { type: 'text', text: delta.content };
-    if (chunk.usage) {
-      yield { type: 'usage', inputTokens: count(chunk.usage.prompt_tokens), outputTokens: count(chunk.usage.completion_tokens), costUsd: count(chunk.usage.cost) };
+  const reader = response.body.getReader();
+  try {
+    for await (const event of iterateSseEvents(reader)) {
+      if (event.type !== 'data') continue;
+      let chunk: Chunk;
+      try { chunk = JSON.parse(event.data) as Chunk; } catch { continue; }
+      const error = safeProviderErrorText(chunk, endpoint.apiKey);
+      if (error) throw new ProviderRequestError(error, 200);
+      const delta = chunk.choices?.[0]?.delta;
+      const reasoning = delta?.reasoning ?? delta?.reasoning_content;
+      if (typeof reasoning === 'string' && reasoning) yield { type: 'reasoning', text: reasoning };
+      if (typeof delta?.content === 'string' && delta.content) yield { type: 'text', text: delta.content };
+      if (chunk.usage) {
+        yield { type: 'usage', inputTokens: count(chunk.usage.prompt_tokens), outputTokens: count(chunk.usage.completion_tokens), costUsd: count(chunk.usage.cost) };
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A pending read releases it when settled. */ }
   }
   yield { type: 'done' };
 }

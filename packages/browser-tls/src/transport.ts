@@ -77,13 +77,12 @@ export type BrowserTlsModule = { BrowserTls: new (host: string) => BrowserTlsEng
 export type CodexTlsFetchOptions = {
   /** Loads the reviewed rustls WASM build; the site bundles the artifact itself. */
   loadEngine: () => Promise<BrowserTlsModule>;
-  /** The site's session token for the relay's ticket route, or null when signed out. Omit it (with
-   * sessionHeader) when the site's session is a same-origin cookie: the ticket request then sends
-   * cookies (`credentials: 'same-origin'`) and the relay reads the session from them. */
+  /** The site's session token for the relay's ticket route, or null when signed out. Omit it and
+   * `sessionHeader` when the relay reads a same-origin session cookie. */
   getSession?: () => { session: string; expiresAt: number } | null | undefined;
   /** Must match the relay's basePath (@byos/server createCodexRelay). */
   relayBasePath: string;
-  /** Must match the relay's sessionHeader. Omit for cookie sessions (see getSession). */
+  /** Must match the relay's sessionHeader. Required with getSession; omit for cookie sessions. */
   sessionHeader?: string;
   /** Appended to the User-Agent, e.g. "Motive browser TLS". */
   clientLabel: string;
@@ -93,7 +92,24 @@ export type CodexTlsFetchOptions = {
 const DEFAULT_MESSAGES = {
   signIn: 'Sign in before connecting your Codex subscription.',
   insecure: 'A secure connection to this site is required.',
+  relayUnavailable: 'The encrypted Codex browser connection is unavailable right now.',
 };
+
+function normalizeRelayBasePath(value: string): string {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[?#\\]/.test(value) || value.includes('//')) {
+    throw new TypeError('relayBasePath must be a same-origin absolute path with safe segments.');
+  }
+  const trimmed = value.endsWith('/') ? value.slice(0, -1) : value;
+  const segments = trimmed.slice(1).split('/');
+  if (!segments.length || segments.some(segment => !segment || segment === '.' || segment === '..' || !/^[A-Za-z0-9._~-]+$/.test(segment))) {
+    throw new TypeError('relayBasePath must be a same-origin absolute path with safe segments.');
+  }
+  return `/${segments.join('/')}`;
+}
+
+function validHeaderName(value: string): boolean {
+  return /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(value);
+}
 
 /**
  * Builds a fetch() for the allowed Codex endpoints that runs TLS inside the browser and sends only
@@ -102,7 +118,13 @@ const DEFAULT_MESSAGES = {
  */
 export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
   const messages = { ...DEFAULT_MESSAGES, ...options.messages };
-  const base = options.relayBasePath.replace(/\/$/, '');
+  const base = normalizeRelayBasePath(options.relayBasePath);
+  if (Boolean(options.getSession) !== Boolean(options.sessionHeader)) {
+    throw new TypeError('Configure both getSession and sessionHeader, or omit both for cookie sessions.');
+  }
+  if (options.sessionHeader !== undefined && !validHeaderName(options.sessionHeader)) {
+    throw new TypeError('sessionHeader must be a valid HTTP header name.');
+  }
   return async function codexTlsFetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
     const { url, destination, method } = validateCodexRequest(input, init);
     init.signal?.throwIfAborted();
@@ -153,7 +175,7 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
         : ticketResponse.status === 429
           ? 'Codex is limiting connection attempts. Wait a moment, then retry.'
           : ticketResponse.status === 503
-            ? 'Codex browser connections are unavailable here. You can still paste a CLI token in Service.'
+            ? messages.relayUnavailable
             : 'Encrypted Codex connections are unavailable right now.', 'relay-rejected', ticketResponse.status);
     }
     const grant = await readTicket(ticketResponse);

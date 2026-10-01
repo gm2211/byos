@@ -13,7 +13,7 @@ import {
 type Call = { url: string; init: RequestInit };
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const sse = (events: unknown[]) => new Response(events.map(e => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
-function fakeFetch(handler: (url: string, init: RequestInit) => Response) {
+function fakeFetch(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const calls: Call[] = [];
   const fetch = async (input: string | URL, init: RequestInit = {}) => { calls.push({ url: String(input), init }); return handler(String(input), init); };
   return { fetch, calls };
@@ -98,6 +98,89 @@ test('stream: a 401 refreshes once, saves the rotated credential and retries', a
   assert.equal(await collect(provider.stream(stored, { model: 'm', messages: [{ role: 'user', content: 'q' }] })), 'ok');
   assert.equal(responses, 2);
   assert.equal(decodeCodexCredential(stored)?.refreshToken, 'rt-new');
+});
+
+test('one canceled inference stops waiting without aborting a shared credential refresh', async () => {
+  let stored = encodeCodexCredential({ accessToken: 'old', refreshToken: 'rt-old', expiresAt: Date.now() - 1 });
+  let finishRefresh!: (response: Response) => void;
+  let markStarted!: () => void;
+  const refreshStarted = new Promise<void>(resolve => { markStarted = resolve; });
+  const refreshResponse = new Promise<Response>(resolve => { finishRefresh = resolve; });
+  const { fetch } = fakeFetch(async (url, init) => {
+    if (url.endsWith('/oauth/token')) {
+      assert.notEqual(init.signal, controller.signal);
+      markStarted();
+      return await refreshResponse;
+    }
+    return sse([{ type: 'response.output_text.delta', delta: 'ok' }, completed]);
+  });
+  const provider = codex({ fetch, readCredential: () => stored, saveCredential: value => { stored = value; }, namespace: 'garden' });
+  const controller = new AbortController();
+  const request = { model: 'm', messages: [{ role: 'user' as const, content: 'q' }] };
+  const canceled = provider.stream(stored, { ...request, signal: controller.signal })[Symbol.asyncIterator]();
+  const canceledNext = canceled.next();
+  await refreshStarted;
+  const continuing = provider.stream(stored, request)[Symbol.asyncIterator]();
+  const continuingNext = continuing.next();
+  controller.abort();
+  await assert.rejects(canceledNext, { name: 'AbortError' });
+  finishRefresh(json(200, { access_token: 'new', refresh_token: 'rt-new', expires_in: 3600 }));
+  const first = await continuingNext;
+  assert.deepEqual(first.value, { type: 'text', text: 'ok' });
+  assert.equal(decodeCodexCredential(stored)?.refreshToken, 'rt-new');
+});
+
+test('refresh never overwrites a credential changed while request is in flight', async () => {
+  const previous = encodeCodexCredential({ accessToken: 'old', refreshToken: 'rt-old', expiresAt: Date.now() - 1 });
+  const replacement = encodeCodexCredential({ accessToken: 'replacement', refreshToken: 'rt-replacement', expiresAt: Date.now() + 3600_000 });
+  let stored = previous;
+  let finishRefresh!: (response: Response) => void;
+  let markStarted!: () => void;
+  let saves = 0;
+  let inferenceAuth = '';
+  const refreshStarted = new Promise<void>(resolve => { markStarted = resolve; });
+  const refreshResponse = new Promise<Response>(resolve => { finishRefresh = resolve; });
+  const { fetch } = fakeFetch(async (url, init) => {
+    if (url.endsWith('/oauth/token')) { markStarted(); return await refreshResponse; }
+    inferenceAuth = (init.headers as Record<string, string>).Authorization;
+    return sse([{ type: 'response.output_text.delta', delta: 'ok' }, completed]);
+  });
+  const provider = codex({ fetch, readCredential: () => stored, saveCredential: value => { saves++; stored = value; } });
+  const iterator = provider.stream(previous, { model: 'm', messages: [{ role: 'user', content: 'q' }] })[Symbol.asyncIterator]();
+  const pending = iterator.next();
+  await refreshStarted;
+  stored = replacement;
+  finishRefresh(json(200, { access_token: 'old-refreshed', refresh_token: 'rt-old-rotated', expires_in: 3600 }));
+  assert.deepEqual(await pending, { done: false, value: { type: 'text', text: 'ok' } });
+  assert.equal(inferenceAuth, 'Bearer replacement');
+  assert.equal(stored, replacement);
+  assert.equal(saves, 0);
+});
+
+test('disconnect during refresh prevents stale token save and inference', async () => {
+  const previous = encodeCodexCredential({ accessToken: 'old', refreshToken: 'rt-old', expiresAt: Date.now() - 1 });
+  let stored = previous;
+  let finishRefresh!: (response: Response) => void;
+  let markStarted!: () => void;
+  let saves = 0;
+  let inferenceCalls = 0;
+  const refreshStarted = new Promise<void>(resolve => { markStarted = resolve; });
+  const refreshResponse = new Promise<Response>(resolve => { finishRefresh = resolve; });
+  const { fetch } = fakeFetch(async (url) => {
+    if (url.endsWith('/oauth/token')) { markStarted(); return await refreshResponse; }
+    inferenceCalls++;
+    return sse([{ type: 'response.output_text.delta', delta: 'should not run' }, completed]);
+  });
+  const provider = codex({ fetch, readCredential: () => stored, saveCredential: value => { saves++; stored = value; } });
+  const iterator = provider.stream(previous, { model: 'm', messages: [{ role: 'user', content: 'q' }] })[Symbol.asyncIterator]();
+  const pending = iterator.next();
+  await refreshStarted;
+  stored = '';
+  finishRefresh(json(200, { access_token: 'old-refreshed', refresh_token: 'rt-old-rotated', expires_in: 3600 }));
+  await assert.rejects(pending, /Connect it again/);
+  assert.equal(stored, '');
+  assert.equal(saves, 0);
+  assert.equal(inferenceCalls, 0);
 });
 
 test('stream: an echoed credential is refused', async () => {

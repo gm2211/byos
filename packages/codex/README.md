@@ -13,9 +13,11 @@ const start = await startCodexDeviceSignIn(fetch);          // show start.userCo
 const poll = await pollCodexDeviceSignIn(fetch, start);     // every start.interval s until !poll.pending
 vault.store('chatgpt', poll.credential, 'browser');
 
-const provider = codex({ fetch, readCredential: () => vault.read('chatgpt'), saveCredential: v => vault.store('chatgpt', v, 'browser') });
+const provider = codex({ fetch, readCredential: () => vault.read('chatgpt'), saveCredential: v => vault.store('chatgpt', v, 'browser'), namespace: 'my-site' });
 for await (const ev of provider.stream(vault.read('chatgpt'), { model, messages })) { ... }
 ```
 
 The provider refreshes the credential when it is near expiry or on a 401 (once), under a Web Lock
 so tabs never rotate the refresh grant twice, and saves the new one through `saveCredential`.
+Set `namespace` to a stable site-specific id when multiple apps share an origin; it scopes the Web
+Lock name and avoids unrelated apps contending during refresh. Omit it for the shared default lock.

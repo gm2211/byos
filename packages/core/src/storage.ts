@@ -2,6 +2,14 @@
  * rendering can pass their own (or none); defaults to the page's globals when they exist. */
 export type ByosStorage = { session?: Storage; local?: Storage };
 
+/** Reject accidental unscoped keys that could collide with another app on a shared origin. */
+export function requireStoragePrefix(prefix: string): string {
+  if (typeof prefix !== 'string' || !prefix.trim() || prefix !== prefix.trim() || prefix.length > 128) {
+    throw new TypeError('Storage prefix must be a non-empty, trimmed string of at most 128 characters.');
+  }
+  return prefix;
+}
+
 export function resolveStorage(storage?: ByosStorage): ByosStorage {
   if (storage) return storage;
   const scope = globalThis as { sessionStorage?: Storage; localStorage?: Storage };

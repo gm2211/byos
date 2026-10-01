@@ -11,6 +11,10 @@ export type AiPillProps = {
   /** e.g. "gpt-5.6-sol · low". */
   label: string;
   setupLabel?: string;
+  /** Accessible name for the unconnected setup button. */
+  setupAriaLabel?: string;
+  /** Accessible name for the connected button. Defaults to the current model/effort label. */
+  ariaLabel?: string;
   prefix?: string;
   onSetup: () => void;
   /** Popover content; rendered only while open, so model-list calls happen when someone looks. */
@@ -18,6 +22,8 @@ export type AiPillProps = {
   popoverLabel?: string;
   /** Media query that turns the popover into a bottom sheet. */
   sheetQuery?: string;
+  /** Optional themed portal root outside clipped containers. Defaults to document.body. */
+  portalContainer?: Element | DocumentFragment;
   className?: string;
   classNames?: { button?: string; prefix?: string; label?: string; popover?: string; backdrop?: string };
 };
@@ -60,13 +66,13 @@ export function AiPill(props: AiPillProps) {
       aria-haspopup={props.connected ? 'dialog' : undefined}
       aria-expanded={props.connected ? open : undefined}
       aria-controls={props.connected && open ? popoverId : undefined}
-      aria-label={props.connected ? `AI: ${label}. Change model or effort` : 'Set up AI'}
+      aria-label={props.connected ? (props.ariaLabel ?? `AI: ${label}. Change model or effort`) : (props.setupAriaLabel ?? 'Set up AI')}
       onClick={() => props.connected ? setOpen(current => !current) : props.onSetup()}
     >
       <i/> <span className={c.prefix ?? 'byos-pill-prefix'}>{props.prefix ?? 'AI'}</span><span className={c.label ?? 'byos-pill-label'}>{label}</span>
     </button>
     {open && (matches(props.sheetQuery ?? '(max-width: 720px)')
-      ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, document.body)
+      ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, props.portalContainer ?? document.body)
       : popover)}
   </div>;
 }

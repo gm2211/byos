@@ -1,4 +1,4 @@
-import { resolveStorage, safeGet, safeRemove, type ByosStorage } from './storage.js';
+import { requireStoragePrefix, resolveStorage, safeGet, safeRemove, type ByosStorage } from './storage.js';
 
 /**
  * TOKEN RULE: a provider token may cross the site's backend once, only to complete the sign-in
@@ -30,16 +30,30 @@ function restore(storage: Storage, key: string, value: string | null): void {
 }
 
 export function createCredentialVault<P extends string = string>(options: CredentialVaultOptions) {
-  const tokenKey = (provider: P) => `${options.prefix}${provider}`;
+  const prefix = requireStoragePrefix(options.prefix);
+  const tokenKey = (provider: P) => `${prefix}${provider}`;
   // A sibling key, not a JSON blob in the token slot, so every reader of "the credential" stays a
   // plain string.
   const refreshKey = (provider: P) => `${tokenKey(provider)}:refresh`;
   const areas = () => resolveStorage(options.storage);
 
-  function required(): { session: Storage; local: Storage } {
-    const { session, local } = areas();
-    if (!session || !local) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
-    return { session, local };
+  function targetStorage(where: CredentialPersistence): Storage {
+    const area = where === 'browser' ? areas().local : areas().session;
+    if (!area) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
+    return area;
+  }
+
+  function snapshot(area: Storage | undefined, tokenKey: string, grantKey: string) {
+    if (!area) return undefined;
+    try { return { area, tokenKey, grantKey, token: area.getItem(tokenKey), grant: area.getItem(grantKey) }; }
+    catch { return undefined; }
+  }
+
+  function rollback(snapshots: Array<ReturnType<typeof snapshot>>): void {
+    for (const prior of snapshots) if (prior) {
+      restore(prior.area, prior.tokenKey, prior.token);
+      restore(prior.area, prior.grantKey, prior.grant);
+    }
   }
 
   function read(provider: P): string {
@@ -48,16 +62,45 @@ export function createCredentialVault<P extends string = string>(options: Creden
   }
 
   function persistence(provider: P): CredentialPersistence {
-    return safeGet(areas().local, tokenKey(provider)) ? 'browser' : 'session';
+    const { session, local } = areas();
+    return safeGet(session, tokenKey(provider)) ? 'session' : safeGet(local, tokenKey(provider)) ? 'browser' : 'session';
   }
 
   function store(provider: P, value: string, where: CredentialPersistence): void {
     const token = value.trim();
-    const { session, local } = required();
-    session.removeItem(tokenKey(provider));
-    local.removeItem(tokenKey(provider));
-    if (!token) return;
-    (where === 'browser' ? local : session).setItem(tokenKey(provider), token);
+    const { session, local } = areas();
+    const key = tokenKey(provider);
+    const grantKey = refreshKey(provider);
+    const target = targetStorage(where);
+    const prior = snapshot(target, key, grantKey);
+    if (!prior) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
+    const other = where === 'browser' ? session : local;
+    const snapshots = [prior, ...(other && other !== target ? [snapshot(other, key, grantKey)] : [])];
+    try {
+      if (token) {
+        target.setItem(key, token);
+        if (target.getItem(key) !== token) throw new Error('Browser storage did not preserve the sign-in.');
+        target.removeItem(grantKey);
+      } else {
+        target.removeItem(key);
+        target.removeItem(grantKey);
+      }
+      // A newly stored credential starts a new lifecycle. Keep no refresh grant from a prior
+      // account; callers that have a matching grant store it explicitly with storeRefresh.
+      if (other && other !== target) {
+        const otherSnapshot = snapshots[1];
+        if (otherSnapshot) {
+          other.removeItem(key);
+          other.removeItem(grantKey);
+        } else {
+          safeRemove(other, key);
+          safeRemove(other, grantKey);
+        }
+      }
+    } catch (error) {
+      rollback(snapshots);
+      throw error;
+    }
   }
 
   function readRefresh(provider: P): SubscriptionRefresh | null {
@@ -77,11 +120,29 @@ export function createCredentialVault<P extends string = string>(options: Creden
   /** Stores (or, with null, clears) the refresh record in the same area as the access token, so the
    * two never outlive one another. */
   function storeRefresh(provider: P, record: SubscriptionRefresh | null, where: CredentialPersistence): void {
-    const { session, local } = required();
-    session.removeItem(refreshKey(provider));
-    local.removeItem(refreshKey(provider));
-    if (!record?.refreshToken) return;
-    (where === 'browser' ? local : session).setItem(refreshKey(provider), JSON.stringify(record));
+    const { session, local } = areas();
+    const key = tokenKey(provider);
+    const grantKey = refreshKey(provider);
+    const target = targetStorage(where);
+    const prior = snapshot(target, key, grantKey);
+    if (!prior) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
+    const other = where === 'browser' ? session : local;
+    const snapshots = [prior, ...(other && other !== target ? [snapshot(other, key, grantKey)] : [])];
+    try {
+      if (record?.refreshToken) target.setItem(grantKey, JSON.stringify(record));
+      else target.removeItem(grantKey);
+      if (record?.refreshToken && target.getItem(grantKey) !== JSON.stringify(record)) {
+        throw new Error('Browser storage did not preserve the sign-in.');
+      }
+      if (other && other !== target) {
+        const otherSnapshot = snapshots[1];
+        if (otherSnapshot) other.removeItem(grantKey);
+        else safeRemove(other, grantKey);
+      }
+    } catch (error) {
+      rollback(snapshots);
+      throw error;
+    }
   }
 
   function clearRefresh(provider: P): void {
@@ -103,19 +164,22 @@ export function createCredentialVault<P extends string = string>(options: Creden
    * destination is verified before the source is cleared, so a quota or security error cannot erase
    * the working sign-in; partial destination writes roll back. */
   function setPersistence(provider: P, where: CredentialPersistence): void {
-    const { session, local } = required();
+    const { session, local } = areas();
     const key = tokenKey(provider);
     const grantKey = refreshKey(provider);
-    const source = session.getItem(key) !== null ? session : local.getItem(key) !== null ? local : null;
+    const source = safeGet(session, key) !== null ? session : safeGet(local, key) !== null ? local : null;
     if (!source) return;
     const target = where === 'browser' ? local : session;
+    if (!target) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
     if (source === target) return;
 
     const token = source.getItem(key);
     if (token === null) return;
-    const grant = session.getItem(grantKey) ?? local.getItem(grantKey);
-    const priorToken = target.getItem(key);
-    const priorGrant = target.getItem(grantKey);
+    const grant = safeGet(session, grantKey) ?? safeGet(local, grantKey);
+    const targetPrior = snapshot(target, key, grantKey);
+    if (!targetPrior) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
+    const sourcePrior = snapshot(source, key, grantKey);
+    if (!sourcePrior) throw new Error('Browser storage is unavailable, so this sign-in cannot be kept.');
     try {
       target.setItem(key, token);
       if (grant === null) target.removeItem(grantKey);
@@ -123,13 +187,12 @@ export function createCredentialVault<P extends string = string>(options: Creden
       if (target.getItem(key) !== token || target.getItem(grantKey) !== grant) {
         throw new Error('Browser storage did not preserve the sign-in.');
       }
+      source.removeItem(grantKey);
+      source.removeItem(key);
     } catch (error) {
-      restore(target, key, priorToken);
-      restore(target, grantKey, priorGrant);
+      rollback([targetPrior, sourcePrior]);
       throw error;
     }
-    source.removeItem(grantKey);
-    source.removeItem(key);
   }
 
   return { read, persistence, store, clear, setPersistence, readRefresh, storeRefresh, clearRefresh };

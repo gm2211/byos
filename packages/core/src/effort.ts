@@ -1,4 +1,4 @@
-import { resolveStorage, safeGet, safeRemove, safeSet, type ByosStorage } from './storage.js';
+import { requireStoragePrefix, resolveStorage, safeGet, safeRemove, safeSet, type ByosStorage } from './storage.js';
 
 /** Reasoning controls accepted by the providers that expose them. */
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
@@ -47,7 +47,8 @@ export type EffortStore = ReturnType<typeof createEffortStore>;
  * before that. A saved value is only honoured while the provider still lists it for that model.
  */
 export function createEffortStore(options: EffortStoreOptions) {
-  const key = (provider: string, model: string) => `${options.prefix}${provider}:${model}`;
+  const prefix = requireStoragePrefix(options.prefix);
+  const key = (provider: string, model: string) => `${prefix}${provider}:${model}`;
   const storage = () => resolveStorage(options.storage);
 
   function read(provider: string, model: EffortModel): ReasoningEffort | undefined {

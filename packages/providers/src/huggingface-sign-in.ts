@@ -1,3 +1,5 @@
+import { redactProviderSecrets } from './chat.js';
+
 /**
  * Hugging Face "Sign in with Hugging Face" -- OAuth 2 authorization code + PKCE, entirely in the
  * browser (https://huggingface.co/docs/hub/en/oauth). huggingface.co/oauth/authorize and
@@ -228,9 +230,10 @@ export function createHuggingFaceSignIn(options: HuggingFaceSignInOptions) {
     return authUrl.toString();
   }
 
-  async function exchangeToken(body: URLSearchParams): Promise<HuggingFaceTokenRecord> {
+  async function exchangeToken(body: URLSearchParams, secrets: readonly string[] = []): Promise<HuggingFaceTokenRecord> {
     const response = await fetch(TOKEN_URL, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     });
@@ -242,7 +245,7 @@ export function createHuggingFaceSignIn(options: HuggingFaceSignInOptions) {
       error?: string;
     };
     if (!response.ok || !payload.access_token) {
-      throw new Error(payload.error_description || payload.error || messages.exchangeFailed);
+      throw new Error(redactProviderSecrets(payload.error_description || payload.error || messages.exchangeFailed, secrets));
     }
     const expiresAt = Date.now() + (typeof payload.expires_in === 'number' ? payload.expires_in : 3600) * 1000;
     return { accessToken: payload.access_token, expiresAt, refreshToken: payload.refresh_token };
@@ -261,7 +264,7 @@ export function createHuggingFaceSignIn(options: HuggingFaceSignInOptions) {
         redirect_uri: options.redirectUri,
         client_id: options.clientId,
         code_verifier: transaction.verifier,
-      }));
+      }), [code, transaction.verifier]);
       clearTransaction();
       storeToken(token);
       return token;
@@ -283,7 +286,7 @@ export function createHuggingFaceSignIn(options: HuggingFaceSignInOptions) {
         grant_type: 'refresh_token',
         refresh_token: current.refreshToken,
         client_id: options.clientId,
-      }));
+      }), [current.refreshToken]);
       storeToken(token);
       return token;
     } catch (error) {
