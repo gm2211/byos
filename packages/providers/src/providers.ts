@@ -33,7 +33,7 @@ export function grok(options: { deviceCodeViaSite?: boolean } = {}): ByosProvide
       { kind: 'api-key', hint: 'An xAI API key from console.x.ai' },
     ],
     availability: () => ({ available: true }),
-    listModels: async token => toCatalog(await listModelsForEndpoint(endpointFor('xai', token))),
+    listModels: async (token, signal) => toCatalog(await listModelsForEndpoint(endpointFor('xai', token), signal)),
     stream: (token, request) => streamChatCompletions(endpointFor('xai', token), request),
   };
 }
@@ -44,7 +44,7 @@ export function groq(): ByosProvider {
     displayName: 'Groq',
     signIn: [{ kind: 'api-key', hint: 'A Groq API key from console.groq.com' }],
     availability: () => ({ available: true }),
-    listModels: async token => toCatalog(await listModelsForEndpoint(endpointFor('groq', token))),
+    listModels: async (token, signal) => toCatalog(await listModelsForEndpoint(endpointFor('groq', token), signal)),
     stream: (token, request) => streamChatCompletions(endpointFor('groq', token), request),
   };
 }
@@ -63,7 +63,7 @@ export function huggingface(options: { clientId?: string } = {}): ByosProvider {
       { kind: 'api-key', hint: 'A fine-grained access token from huggingface.co/settings/tokens' },
     ],
     availability: () => ({ available: true }),
-    listModels: async token => toCatalog(await listModelsForEndpoint(endpointFor('huggingface', token))),
+    listModels: async (token, signal) => toCatalog(await listModelsForEndpoint(endpointFor('huggingface', token), signal)),
     stream: (token, request) => streamChatCompletions(endpointFor('huggingface', token), request),
   };
 }

@@ -27,6 +27,27 @@ test('vault keeps Motive-compatible keys and separates sites by prefix', () => {
   assert.equal(other.read('xai-oauth'), '');
 });
 
+test('storage-backed helpers reject unscoped prefixes', () => {
+  assert.throws(() => createCredentialVault({ prefix: '', storage: areas() }), /Storage prefix/);
+  assert.throws(() => createEffortStore({ prefix: ' ', storage: areas() }), /Storage prefix/);
+  assert.throws(() => createModelCatalogCache({ prefix: 'x'.repeat(129), storage: areas() }), /Storage prefix/);
+});
+
+test('session-only sign-in works when localStorage is unavailable', () => {
+  const session = new MemoryStorage();
+  const vault = createCredentialVault({ prefix: 'session-only:', storage: { session } });
+  vault.store('provider', 'token', 'session');
+  vault.storeRefresh('provider', { refreshToken: 'refresh' }, 'session');
+  assert.equal(vault.read('provider'), 'token');
+  assert.equal(vault.persistence('provider'), 'session');
+  assert.deepEqual(vault.readRefresh('provider'), { refreshToken: 'refresh', expiresAt: undefined });
+  vault.setPersistence('provider', 'session');
+  assert.throws(() => vault.store('provider', 'token', 'browser'), /storage is unavailable/);
+  vault.clear('provider');
+  assert.equal(vault.read('provider'), '');
+  assert.equal(vault.readRefresh('provider'), null);
+});
+
 test('clearing a sign-in also forgets its refresh grant', () => {
   const vault = createCredentialVault({ prefix: 'p:', storage: areas() });
   vault.store('codex', 'a', 'session');
@@ -35,6 +56,24 @@ test('clearing a sign-in also forgets its refresh grant', () => {
   vault.clear('codex');
   assert.equal(vault.read('codex'), '');
   assert.equal(vault.readRefresh('codex'), null);
+});
+
+test('replacing a sign-in removes its previous refresh grant and preserves old state on write failure', () => {
+  const storage = areas();
+  const vault = createCredentialVault({ prefix: 'p:', storage });
+  vault.store('codex', 'old-account', 'session');
+  vault.storeRefresh('codex', { refreshToken: 'old-refresh', expiresAt: 1 }, 'session');
+
+  storage.local.failWrites = true;
+  assert.throws(() => vault.store('codex', 'new-account', 'browser'), /quota/);
+  assert.equal(vault.read('codex'), 'old-account');
+  assert.deepEqual(vault.readRefresh('codex'), { refreshToken: 'old-refresh', expiresAt: 1 });
+
+  storage.local.failWrites = false;
+  vault.store('codex', 'new-account', 'browser');
+  assert.equal(vault.read('codex'), 'new-account');
+  assert.equal(vault.readRefresh('codex'), null);
+  assert.equal(storage.session.getItem('p:codex'), null);
 });
 
 test('moving persistence carries the grant and rolls back when storage refuses', () => {

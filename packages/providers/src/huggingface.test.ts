@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // Built output: sources use NodeNext `.js` imports.
-import { endpointFor, huggingface, createHuggingFaceSignIn } from '../dist/index.js';
+import { endpointFor, huggingface, createHuggingFaceSignIn, createOpenRouterSignIn } from '../dist/index.js';
 
 type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response): Call[] {
@@ -67,6 +67,7 @@ test('huggingface() model discovery and streaming reuse the shared kit machinery
   assert.deepEqual(await huggingface().listModels('hf_secret'), [{ id: 'meta-llama/x', name: 'Llama X' }]);
   assert.equal(calls[0].url, 'https://router.huggingface.co/v1/models');
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer hf_secret');
+  assert.equal(calls[0].init?.redirect, 'error');
 });
 
 test('authorize URL carries a fresh state and an S256 PKCE challenge', async () => {
@@ -107,6 +108,7 @@ test('complete() exchanges the code at HF\'s token endpoint using the stored ver
   assert.equal(token.refreshToken, 'r1');
   assert.ok(token.expiresAt >= before + 3600 * 1000);
   assert.equal(calls[0].url, 'https://huggingface.co/oauth/token');
+  assert.equal(calls[0].init?.redirect, 'error');
   assert.equal(calls[0].init?.headers && (calls[0].init.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded');
   const body = new URLSearchParams(String(calls[0].init?.body));
   assert.equal(body.get('grant_type'), 'authorization_code');
@@ -126,4 +128,48 @@ test('refresh() uses the stored refresh_token and clears the connection when the
   const refreshed = await signIn.refresh();
   assert.equal(refreshed.accessToken, 'fresh');
   assert.equal(signIn.getStoredToken()?.accessToken, 'fresh');
+});
+
+test('Hugging Face OAuth errors redact code and refresh token', async () => {
+  const signIn = makeSignIn();
+  await signIn.storeTransaction({ verifier: 'the-verifier', state: 'state', createdAt: Date.now(), returnRoute: '' });
+  let calls = fakeFetch(() => new Response(JSON.stringify({ error_description: 'Rejected the-code the-verifier' }), { status: 400 }));
+  await assert.rejects(() => signIn.complete('the-code', 'state'), error => {
+    assert.ok(!String(error).includes('the-code'));
+    assert.ok(!String(error).includes('the-verifier'));
+    assert.match(String(error), /\[redacted\]/);
+    return true;
+  });
+  assert.equal(calls[0].init?.redirect, 'error');
+
+  signIn.storeToken({ accessToken: 'access', expiresAt: Date.now() - 1, refreshToken: 'secret-refresh' });
+  calls = fakeFetch(() => new Response(JSON.stringify({ error_description: 'Rejected secret-refresh' }), { status: 400 }));
+  await assert.rejects(() => signIn.refresh(), error => {
+    assert.ok(!String(error).includes('secret-refresh'));
+    assert.match(String(error), /\[redacted\]/);
+    return true;
+  });
+  assert.equal(calls[0].init?.redirect, 'error');
+});
+
+test('OpenRouter PKCE exchange rejects redirects and redacts code and verifier errors', async () => {
+  const id = ++signInCounter;
+  const transactionKey = `test-openrouter-pkce-${id}`;
+  const code = 'synthetic-code';
+  const verifier = 'synthetic-verifier';
+  sessionStorage.setItem(transactionKey, JSON.stringify({ verifier, createdAt: Date.now(), returnRoute: '' }));
+  const signIn = createOpenRouterSignIn({
+    keyStorageKey: `test-openrouter-key-${id}`,
+    transactionStorageKey: transactionKey,
+    handoffChannel: `test-openrouter-channel-${id}`,
+    handoffFallbackKey: `test-openrouter-fallback-${id}`,
+  });
+  const calls = fakeFetch(() => new Response(JSON.stringify({ error: { message: 'Rejected synthetic-code synthetic-verifier' } }), { status: 400 }));
+  await assert.rejects(() => signIn.complete(code), error => {
+    assert.ok(!String(error).includes(code));
+    assert.ok(!String(error).includes(verifier));
+    assert.match(String(error), /\[redacted\]/);
+    return true;
+  });
+  assert.equal(calls[0].init?.redirect, 'error');
 });

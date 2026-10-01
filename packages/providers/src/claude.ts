@@ -1,5 +1,5 @@
 import type { ByosProvider, CatalogModel, ChatEvent, ChatRequest, ReasoningEffort } from '@byos/core';
-import { ProviderRequestError, providerErrorText } from './chat.js';
+import { ProviderRequestError, safeProviderErrorText } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 
 /**
@@ -75,9 +75,9 @@ export async function listClaudeModels(key: string, signal?: AbortSignal, subscr
   const models: CatalogModel[] = [];
   let after = '';
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const response = await fetch(`${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`, { headers: headers(key, false), signal });
+    const response = await fetch(`${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`, { headers: headers(key, false), signal, redirect: 'error' });
     const payload = await response.json().catch(() => ({})) as { data?: unknown; has_more?: unknown; last_id?: unknown };
-    if (!response.ok) throw new ProviderRequestError(providerErrorText(payload) ?? `Claude model list failed (${response.status}).`, response.status);
+    if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude model list failed (${response.status}).`, response.status);
     models.push(...parseAnthropicModels(payload.data));
     if (payload.has_more !== true || typeof payload.last_id !== 'string') break;
     after = payload.last_id;
@@ -92,6 +92,7 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   const response = await fetch(`${API}/messages`, {
     method: 'POST',
     signal: request.signal,
+    redirect: 'error',
     headers: headers(key, true),
     body: JSON.stringify({
       model: request.model,
@@ -105,22 +106,28 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   });
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => undefined);
-    throw new ProviderRequestError(providerErrorText(payload) ?? `Claude answered ${response.status}.`, response.status);
+    throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude answered ${response.status}.`, response.status);
   }
   let inputTokens: number | undefined;
-  for await (const event of iterateSseEvents(response.body.getReader())) {
-    if (event.type !== 'data') continue;
-    let data: { type?: string; delta?: { type?: string; text?: unknown; thinking?: unknown }; message?: { usage?: { input_tokens?: unknown } }; usage?: { output_tokens?: unknown }; error?: unknown };
-    try { data = JSON.parse(event.data); } catch { continue; }
-    if (data.type === 'error') throw new ProviderRequestError(providerErrorText(data) ?? 'Claude stopped with an error.', 200);
-    if (data.type === 'message_start' && typeof data.message?.usage?.input_tokens === 'number') inputTokens = data.message.usage.input_tokens;
-    if (data.type === 'content_block_delta') {
-      if (data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') yield { type: 'text', text: data.delta.text };
-      if (data.delta?.type === 'thinking_delta' && typeof data.delta.thinking === 'string') yield { type: 'reasoning', text: data.delta.thinking };
+  const reader = response.body.getReader();
+  try {
+    for await (const event of iterateSseEvents(reader)) {
+      if (event.type !== 'data') continue;
+      let data: { type?: string; delta?: { type?: string; text?: unknown; thinking?: unknown }; message?: { usage?: { input_tokens?: unknown } }; usage?: { output_tokens?: unknown }; error?: unknown };
+      try { data = JSON.parse(event.data); } catch { continue; }
+      if (data.type === 'error') throw new ProviderRequestError(safeProviderErrorText(data, key) ?? 'Claude stopped with an error.', 200);
+      if (data.type === 'message_start' && typeof data.message?.usage?.input_tokens === 'number') inputTokens = data.message.usage.input_tokens;
+      if (data.type === 'content_block_delta') {
+        if (data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') yield { type: 'text', text: data.delta.text };
+        if (data.delta?.type === 'thinking_delta' && typeof data.delta.thinking === 'string') yield { type: 'reasoning', text: data.delta.thinking };
+      }
+      if (data.type === 'message_delta' && typeof data.usage?.output_tokens === 'number') {
+        yield { type: 'usage', inputTokens, outputTokens: data.usage.output_tokens };
+      }
     }
-    if (data.type === 'message_delta' && typeof data.usage?.output_tokens === 'number') {
-      yield { type: 'usage', inputTokens, outputTokens: data.usage.output_tokens };
-    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A pending read releases it when settled. */ }
   }
   yield { type: 'done' };
 }

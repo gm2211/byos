@@ -10,6 +10,9 @@ export type SelectRenderer = (props: { ariaLabel: string; value: string; options
 export type ModelEffortPickerStrings = {
   model: string;
   effort: string;
+  /** Accessible names for the select controls. Defaults follow the visible field labels. */
+  modelAriaLabel: string;
+  effortAriaLabel: string;
   effortFrom: (providerName: string) => string;
   noEffort: (providerName: string) => string;
   providerDefault: string;
@@ -21,6 +24,8 @@ export type ModelEffortPickerStrings = {
 export const defaultModelEffortStrings: ModelEffortPickerStrings = {
   model: 'MODEL',
   effort: 'EFFORT',
+  modelAriaLabel: 'Model',
+  effortAriaLabel: 'Effort',
   effortFrom: name => `from ${name}`,
   noEffort: name => `${name} sets the effort itself for this model; it doesn’t offer a choice.`,
   providerDefault: 'Provider default',
@@ -54,6 +59,8 @@ const nativeSelect: SelectRenderer = ({ ariaLabel, value, options, onChange }) =
 
 export function ModelEffortPicker(props: ModelEffortPickerProps) {
   const s = { ...defaultModelEffortStrings, ...props.strings };
+  s.modelAriaLabel = props.strings?.modelAriaLabel ?? props.strings?.model ?? defaultModelEffortStrings.modelAriaLabel;
+  s.effortAriaLabel = props.strings?.effortAriaLabel ?? props.strings?.effort ?? defaultModelEffortStrings.effortAriaLabel;
   const c = props.classNames ?? {};
   const select = props.renderSelect ?? nativeSelect;
   const field = c.field ?? 'byos-field';
@@ -62,15 +69,15 @@ export function ModelEffortPicker(props: ModelEffortPickerProps) {
   return <div className={c.root ?? 'byos byos-model-effort'}>
     <div className={field}>
       <span>{s.model} {props.modelNote && <small>{props.modelNote}</small>}</span>
-      {select({ ariaLabel: 'Model', value: props.model, options: props.models, onChange: props.onModelChange })}
+      {select({ ariaLabel: s.modelAriaLabel, value: props.model, options: props.models, onChange: props.onModelChange })}
     </div>
     {/* Effort is its own setting, always shown: a model without selectable levels still says so in
         the same place, rather than the field disappearing into a note under the model. */}
     <div className={field}>
       <span>{s.effort} {props.efforts.length > 0 && <small>{s.effortFrom(props.providerName)}</small>}</span>
       {props.efforts.length > 0
-        ? select({ ariaLabel: 'Effort', value: props.effort, options: props.efforts, onChange: props.onEffortChange })
-        : select({ ariaLabel: 'Effort', value: '', options: [{ value: '', label: s.providerDefault }], onChange: () => undefined })}
+        ? select({ ariaLabel: s.effortAriaLabel, value: props.effort, options: props.efforts, onChange: props.onEffortChange })
+        : select({ ariaLabel: s.effortAriaLabel, value: '', options: [{ value: '', label: s.providerDefault }], onChange: () => undefined })}
       {props.efforts.length === 0 && <p className={note}>{s.noEffort(props.providerName)}</p>}
     </div>
     {stale && <p className={note}>{props.staleness === 'remembered' ? s.remembered(props.providerName) : s.fallback(props.providerName)}{props.onRetry && <> <button type="button" className={c.retry ?? 'byos-link-button'} onClick={props.onRetry}>{s.retry}</button></>}</p>}

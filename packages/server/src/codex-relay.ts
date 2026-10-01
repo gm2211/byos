@@ -123,6 +123,9 @@ export type CodexRelayOptions = {
   /** Maps the site's own session token to an account. Only signed-in visitors may open a tunnel;
    * `ownerKey` scopes rate and byte limits. */
   resolveSession: (session: string) => Promise<AccountSession | undefined>;
+  /** Reads the site's session from the ticket request, typically from a signed session cookie.
+   * Configure this or `sessionHeader`, but not both. */
+  readSession?: (request: IncomingMessage) => string | undefined;
   /** Browser origins allowed to request tickets and open tunnels (exact origins, https in prod). */
   allowedOrigins: () => Set<string>;
   /** The release gate; the relay refuses everything while this is false. */
@@ -130,8 +133,9 @@ export type CodexRelayOptions = {
   /** Route prefix, e.g. `/api/ai/codex-tunnel` (Motive's). Tunnels live at `${basePath}/auth` and
    * `${basePath}/responses`; tickets at `${basePath}/ticket`. */
   basePath: string;
-  /** Request header carrying the site's session token on ticket requests. */
-  sessionHeader: string;
+  /** Request header carrying the site's session token on ticket requests. Configure this or
+   * `readSession`, but not both. */
+  sessionHeader?: string;
   /** User-facing wording; defaults name Codex. */
   messages?: Partial<typeof DEFAULT_MESSAGES>;
   lookupAddresses?: (host: string) => Promise<{ address: string; family: number }[]>;
@@ -152,11 +156,31 @@ const DEFAULT_MESSAGES = {
   tooMany: 'Too many Codex transport attempts. Try again shortly.',
 };
 
+function normalizeBasePath(value: string): string {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[?#\\]/.test(value) || value.includes('//')) {
+    throw new TypeError('basePath must be a same-origin absolute path with safe segments.');
+  }
+  const trimmed = value.endsWith('/') ? value.slice(0, -1) : value;
+  const segments = trimmed.slice(1).split('/');
+  if (!segments.length || segments.some(segment => !segment || segment === '.' || segment === '..' || !/^[A-Za-z0-9._~-]+$/.test(segment))) {
+    throw new TypeError('basePath must be a same-origin absolute path with safe segments.');
+  }
+  return `/${segments.join('/')}`;
+}
+
 /** Implements only the outer WSS-to-TCP byte transport. It never reads TLS records or provider HTTP. */
 export function createCodexRelay(options: CodexRelayOptions) {
   const { resolveSession, allowedOrigins, enabled: featureEnabled } = options;
+  const sessionHeader = options.sessionHeader;
+  const readSession = options.readSession;
+  if ((typeof sessionHeader === 'string') === (typeof readSession === 'function')) {
+    throw new TypeError('Configure exactly one of sessionHeader or readSession.');
+  }
+  if (sessionHeader !== undefined && !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(sessionHeader)) {
+    throw new TypeError('sessionHeader must be a valid HTTP header name.');
+  }
   const messages = { ...DEFAULT_MESSAGES, ...options.messages };
-  const base = options.basePath.replace(/\/$/, '');
+  const base = normalizeBasePath(options.basePath);
   const PATHS = { auth: `${base}/auth`, responses: `${base}/responses` } as const;
   const lookupAddresses = options.lookupAddresses ?? (async host => {
     const addresses = await lookup(host, { all: true, verbatim: true });
@@ -207,8 +231,10 @@ export function createCodexRelay(options: CodexRelayOptions) {
     if (!accepting || !featureEnabled()) { res.status(503).json({ error: messages.unavailable }); return; }
     const origin = req.get('Origin');
     if (!origin || !allowedOrigins().has(origin)) { res.status(403).json({ error: messages.originRejected }); return; }
-    const session = req.get(options.sessionHeader);
-    if (!session || session.length > 512) { res.status(401).json({ error: messages.signIn }); return; }
+    let session: string | undefined;
+    try { session = readSession ? readSession(req) : req.get(sessionHeader!); }
+    catch { res.status(503).json({ error: messages.unavailable }); return; }
+    if (typeof session !== 'string' || session.length === 0 || session.length > 512) { res.status(401).json({ error: messages.signIn }); return; }
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)
       || Object.keys(req.body).length !== 1 || !validDestination(req.body.destination)) {
       res.status(400).json({ error: messages.destination }); return;

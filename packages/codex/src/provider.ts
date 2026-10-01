@@ -21,6 +21,8 @@ export type CodexProviderOptions = {
   readCredential: () => string | null | undefined;
   /** Saves a refreshed credential in the same place. */
   saveCredential: (value: string) => void;
+  /** Site-specific suffix for the cross-tab Web Lock; avoids unrelated apps contending on one origin. */
+  namespace?: string;
   /** Shown when the site has no relay (release gate off). */
   unavailableReason?: () => string | undefined;
 };
@@ -29,6 +31,16 @@ export function codex(options: CodexProviderOptions): ByosProvider {
   // One refresh at a time per browser: OpenAI rotates the refresh grant, so two parallel refreshes
   // would sign the driver out. Web Locks cover tabs; the in-flight promise covers this page.
   let inflight: Promise<string> | undefined;
+  const lockName = `byos-codex-refresh:${options.namespace?.trim() || 'default'}`;
+  async function waitForCaller<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return promise;
+    signal.throwIfAborted();
+    return new Promise<T>((resolve, reject) => {
+      const aborted = () => reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+      signal.addEventListener('abort', aborted, { once: true });
+      promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', aborted));
+    });
+  }
   async function refreshed(token: string, force: boolean, signal?: AbortSignal): Promise<CodexCredential> {
     const current = decodeCodexCredential(token);
     if (!current) throw new CodexReconnectRequiredError();
@@ -39,17 +51,30 @@ export function codex(options: CodexProviderOptions): ByosProvider {
     }
     const run = async () => {
       const latest = options.readCredential();
-      // Someone else already rotated it: use theirs.
-      if (latest && latest !== token) return latest;
-      const next = await refreshCodexCredential(options.fetch, current, signal);
+      // A reconnect or disconnect may happen while a refresh is queued for the Web Lock.
+      // Never send the old account's refresh grant after the stored credential changes.
+      if (latest !== token) {
+        if (!latest) throw new CodexReconnectRequiredError();
+        return latest;
+      }
+      // Refresh grant rotates on success. Finish and save it even if one waiting inference is
+      // canceled; each caller may stop waiting independently below.
+      const next = await refreshCodexCredential(options.fetch, current);
+      // The user may have reconnected or disconnected while OpenAI rotated the old grant. Do not
+      // overwrite that newer choice with the response for the previous account.
+      const afterRefresh = options.readCredential();
+      if (afterRefresh !== token) {
+        if (!afterRefresh) throw new CodexReconnectRequiredError();
+        return afterRefresh;
+      }
       options.saveCredential(next);
       return next;
     };
     inflight ??= (globalThis.navigator?.locks
-      ? (globalThis.navigator.locks.request('byos-codex-refresh', { mode: 'exclusive' }, run) as unknown as Promise<string>)
+      ? (globalThis.navigator.locks.request(lockName, { mode: 'exclusive' }, run) as unknown as Promise<string>)
       : run()
     ).finally(() => { inflight = undefined; });
-    const value = await inflight;
+    const value = await waitForCaller(inflight, signal);
     const next = decodeCodexCredential(value);
     if (!next) throw new CodexReconnectRequiredError();
     return next;

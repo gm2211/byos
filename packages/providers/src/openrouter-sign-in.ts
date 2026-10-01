@@ -1,3 +1,5 @@
+import { providerErrorText, redactProviderSecrets } from './chat.js';
+
 /**
  * OpenRouter sign-in with PKCE, entirely in the browser. OpenRouter's /auth/keys endpoint answers
  * browser origins, so the site's server never sees the code, the verifier or the resulting key.
@@ -191,13 +193,15 @@ export function createOpenRouterSignIn(options: OpenRouterSignInOptions) {
       const verifier = readPkceVerifier();
       const response = await fetch(`${API_ROOT}/auth/keys`, {
         method: 'POST',
+        redirect: 'error',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
       });
       const payload = await response.json().catch(() => ({})) as { key?: string; error?: { message?: string } };
       if (!response.ok || !payload.key) {
         if (response.status === 400 || response.status === 403) clearPkceTransaction();
-        throw new Error(payload.error?.message || messages.exchangeFailed);
+        const message = providerErrorText(payload) || messages.exchangeFailed;
+        throw new Error(redactProviderSecrets(message, [code, verifier]));
       }
       clearPkceTransaction();
       storeKey(payload.key);

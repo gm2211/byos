@@ -37,12 +37,14 @@ export interface DeviceCodeMessages {
   missingAttempt: string;
   expired: string;
   declined: string;
+  failed: string;
 }
 
 const DEFAULT_MESSAGES: DeviceCodeMessages = {
   missingAttempt: 'This sign-in attempt is no longer active. Reload the page and connect again.',
   expired: 'The device code expired. Start again.',
   declined: 'Authorization was declined in the browser.',
+  failed: 'Authorization could not be completed. Try again.',
 };
 
 export interface DeviceCodeStart {
@@ -83,9 +85,26 @@ export function isDeviceCodeAttemptId(value: unknown): value is string {
   return typeof value === 'string' && ATTEMPT_ID_PATTERN.test(value);
 }
 
+const MAX_VERIFICATION_URI_LENGTH = 2_048;
+
+function isSafeVerificationUri(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_VERIFICATION_URI_LENGTH
+    || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password;
+  } catch { return false; }
+}
+
 export function createDeviceCodeBroker(options: DeviceCodeBrokerOptions) {
   const maxLifetimeMs = options.maxLifetimeMs ?? 15 * 60 * 1000;
   const maxPending = options.maxPending ?? 500;
+  if (!Number.isSafeInteger(maxLifetimeMs) || maxLifetimeMs <= 0) {
+    throw new TypeError('maxLifetimeMs must be a positive safe integer.');
+  }
+  if (!Number.isSafeInteger(maxPending) || maxPending <= 0) {
+    throw new TypeError('maxPending must be a positive safe integer.');
+  }
   const doFetch = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const now = options.now ?? Date.now;
   const messages = { ...DEFAULT_MESSAGES, ...options.messages };
@@ -103,16 +122,19 @@ export function createDeviceCodeBroker(options: DeviceCodeBrokerOptions) {
   }
 
   async function start(): Promise<DeviceCodeStart> {
-    const res = await doFetch(options.deviceCodeUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form({ client_id: options.clientId, scope: options.scope }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Device code request failed (HTTP ${res.status}): ${text.slice(0, 200)}`);
-    }
-    const data = await res.json() as Record<string, unknown>;
+    let res: Response;
+    try {
+      res = await doFetch(options.deviceCodeUrl, {
+        method: 'POST',
+        redirect: 'error',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form({ client_id: options.clientId, scope: options.scope }),
+      });
+    } catch { throw new Error(messages.failed); }
+    if (!res.ok) throw new Error(`Device code request failed (HTTP ${res.status}).`);
+    let data: Record<string, unknown>;
+    try { data = await res.json() as Record<string, unknown>; }
+    catch { throw new Error('Device code provider returned an invalid response.'); }
     const deviceCode = typeof data.device_code === 'string' ? data.device_code : '';
     const userCode = typeof data.user_code === 'string' ? data.user_code : '';
     const verificationUri = typeof data.verification_uri === 'string' ? data.verification_uri : '';
@@ -122,8 +144,19 @@ export function createDeviceCodeBroker(options: DeviceCodeBrokerOptions) {
     const verificationUriComplete = typeof data.verification_uri_complete === 'string'
       ? data.verification_uri_complete
       : `${verificationUri}?user_code=${encodeURIComponent(userCode)}`;
-    const interval = Math.max(3, Number(data.interval ?? 5));
-    const codeLifetimeMs = Number(data.expires_in ?? 0) * 1000;
+    if (!isSafeVerificationUri(verificationUri) || !isSafeVerificationUri(verificationUriComplete)) {
+      throw new Error('Device code provider returned an invalid verification link.');
+    }
+    const providerInterval = Number(data.interval ?? 5);
+    if (!Number.isFinite(providerInterval) || providerInterval < 0 || providerInterval > maxLifetimeMs / 1000) {
+      throw new Error('Device code provider returned an invalid polling interval.');
+    }
+    const interval = Math.max(3, providerInterval);
+    const codeLifetimeSeconds = Number(data.expires_in ?? 0);
+    if (data.expires_in !== undefined && (!Number.isFinite(codeLifetimeSeconds) || codeLifetimeSeconds <= 0)) {
+      throw new Error('Device code provider returned an invalid expiration.');
+    }
+    const codeLifetimeMs = codeLifetimeSeconds * 1000;
     const expiresAt = now() + (codeLifetimeMs > 0 ? Math.min(codeLifetimeMs, maxLifetimeMs) : maxLifetimeMs);
 
     if (!isDeviceCodeAttemptId(deviceCode)) throw new Error('Device code response carried an unexpected device_code format.');
@@ -156,6 +189,7 @@ export function createDeviceCodeBroker(options: DeviceCodeBrokerOptions) {
     try {
       res = await doFetch(options.tokenUrl, {
         method: 'POST',
+        redirect: 'error',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form({ grant_type: DEVICE_CODE_GRANT, client_id: options.clientId, device_code: deviceCode }),
       });
@@ -168,14 +202,13 @@ export function createDeviceCodeBroker(options: DeviceCodeBrokerOptions) {
       const code = typeof payload.error === 'string' ? payload.error : '';
       if (code === 'authorization_pending') return { connected: false, pending: true };
       if (code === 'slow_down') {
-        throttle.intervalMs += 5_000;
+        throttle.intervalMs = Math.min(throttle.intervalMs + 5_000, maxLifetimeMs);
         return { connected: false, pending: true };
       }
       throttles.delete(key);
       if (code === 'access_denied') return { connected: false, pending: false, error: messages.declined };
       if (code === 'expired_token') return { connected: false, pending: false, error: messages.expired };
-      const description = typeof payload.error_description === 'string' ? payload.error_description : '';
-      return { connected: false, pending: false, error: description || code || `Authorization failed (HTTP ${res.status}).` };
+      return { connected: false, pending: false, error: messages.failed };
     }
 
     // The device code is single-use whatever happens next.

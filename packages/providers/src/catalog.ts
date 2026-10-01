@@ -1,5 +1,6 @@
 import type { CloudEndpoint } from './endpoints.js';
 import { PROVIDER_BASE_URLS } from './endpoints.js';
+import { safeProviderErrorText } from './chat.js';
 
 export type OpenRouterKeyInfo = {
   label?: string;
@@ -55,15 +56,15 @@ function fitRank(fit: OpenRouterModel['analysisFit']): number {
 }
 
 export async function readOpenRouterKeyInfo(key: string, signal?: AbortSignal): Promise<OpenRouterKeyInfo> {
-  const response = await fetch(`${API_ROOT}/key`, { signal, headers: { Authorization: `Bearer ${key}` } });
+  const response = await fetch(`${API_ROOT}/key`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${key}` } });
   rejectInvalidCredential(response.status);
   const payload = await response.json().catch(() => ({})) as { data?: OpenRouterKeyInfo; error?: { message?: string } };
-  if (!response.ok) throw new Error(payload.error?.message || 'OpenRouter rejected this key.');
+  if (!response.ok) throw new Error(safeProviderErrorText(payload, key) || 'OpenRouter rejected this key.');
   return payload.data ?? {};
 }
 
 export async function listOpenRouterModels(key: string, signal?: AbortSignal): Promise<OpenRouterModel[]> {
-  const response = await fetch(`${API_ROOT}/models`, { signal, headers: { Authorization: `Bearer ${key}` } });
+  const response = await fetch(`${API_ROOT}/models`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${key}` } });
   rejectInvalidCredential(response.status);
   const payload = await response.json().catch(() => ({})) as {
     data?: Array<{
@@ -75,7 +76,7 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
     }>;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(payload.error?.message || 'Could not load OpenRouter models.');
+  if (!response.ok) throw new Error(safeProviderErrorText(payload, key) || 'Could not load OpenRouter models.');
   return (payload.data ?? [])
     .filter(model => model.id && model.supported_parameters?.includes('tools'))
     .map(model => {
@@ -104,13 +105,13 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
  * heuristic, which was tuned against OpenRouter's own model-name conventions (e.g. "sonar-pro") that
  * do not apply to xAI's or Groq's catalog.
  */
-export async function listModelsForEndpoint(endpoint: CloudEndpoint): Promise<OpenRouterModel[]> {
-  const response = await fetch(`${endpoint.baseUrl}/models`, { headers: { Authorization: `Bearer ${endpoint.apiKey}`, ...endpoint.headers } });
+export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: AbortSignal): Promise<OpenRouterModel[]> {
+  const response = await fetch(`${endpoint.baseUrl}/models`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${endpoint.apiKey}`, ...endpoint.headers } });
   const payload = await response.json().catch(() => ({})) as {
     data?: Array<{ id?: string; name?: string }>;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(payload.error?.message || 'Could not load models.');
+  if (!response.ok) throw new Error(safeProviderErrorText(payload, endpoint.apiKey) || 'Could not load models.');
   return (payload.data ?? [])
     .filter((model): model is { id: string; name?: string } => Boolean(model.id))
     .map(model => ({ id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false }))

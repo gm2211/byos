@@ -20,5 +20,23 @@ app.use(express.json(), relay.router);
 relay.handleUpgrade(httpServer);
 ```
 
+Header mode uses `sessionHeader` to read the site's session token before `resolveSession` maps it to
+an account. For same-origin cookie sessions, omit `sessionHeader` and provide a request reader:
+
+```ts
+const relay = createCodexRelay({
+  basePath: '/api/ai/codex-tunnel',
+  readSession: request => readAndVerifySessionCookie(request.headers.cookie),
+  resolveSession: async session => session ? (await mySessions.get(session)) : undefined,
+  allowedOrigins: () => new Set(['https://my-site.example']),
+  enabled: () => true,
+});
+```
+
+Configure exactly one of `sessionHeader` or `readSession`. A missing or invalid session returns 401;
+exceptions from the reader return a generic 503. `basePath` must be a same-origin absolute path
+with safe path segments; external URLs, query strings, fragments, repeated slashes, and traversal
+segments are rejected during construction.
+
 Limits (per-account and global byte windows, connection caps, frame sizes, lifetimes, public-IP
 pinning) are fixed in the package on purpose.
