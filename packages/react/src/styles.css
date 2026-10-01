@@ -69,8 +69,6 @@
 .byos-pill-prefix { flex: none; }
 .byos-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; font: 400 12px var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); color: var(--byos-text, #1b1f27); }
 .byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius-lg, 14px); background: var(--byos-surface, #ffffff); box-shadow: var(--byos-shadow, 0 24px 60px -24px rgb(0 0 0 / .35)); color: var(--byos-text, #1b1f27); font: 400 14px/1.5 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); text-align: left; }
+.byos-pill-popover-sheet { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: var(--byos-radius-lg, 14px) var(--byos-radius-lg, 14px) 0 0; }
 .byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: rgb(0 0 0 / .35); }
-@media (max-width: 720px) {
-  body > .byos-pill-popover { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: var(--byos-radius-lg, 14px) var(--byos-radius-lg, 14px) 0 0; }
-}
 @media (prefers-reduced-motion: reduce) { .byos-signin .byos-signin-primary, .byos-dialog-close { transition: none; } }

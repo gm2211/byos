@@ -28,16 +28,13 @@ export type AiPillProps = {
   classNames?: { button?: string; prefix?: string; label?: string; popover?: string; backdrop?: string };
 };
 
-function matches(query: string): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
-}
-
 export function AiPill(props: AiPillProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const popoverId = useId();
   const c = props.classNames ?? {};
+  const sheetQuery = props.sheetQuery ?? '(max-width: 720px)';
 
   useEffect(() => {
     if (!open) return;
@@ -56,9 +53,22 @@ export function AiPill(props: AiPillProps) {
     };
   }, [open]);
 
+  const [sheet, setSheet] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setSheet(false);
+      return;
+    }
+    const media = window.matchMedia(sheetQuery);
+    const update = () => setSheet(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [sheetQuery]);
+
   const label = props.connected ? props.label : (props.setupLabel ?? 'Set up');
   const close = () => setOpen(false);
-  const popover = <Popover sheetRef={popoverRef} id={popoverId} label={props.popoverLabel ?? 'Quick AI settings'} className={c.popover ?? 'byos-pill-popover'}>{props.children(close)}</Popover>;
+  const popover = <Popover sheetRef={popoverRef} id={popoverId} label={props.popoverLabel ?? 'Quick AI settings'} className={`${c.popover ?? 'byos-pill-popover'}${sheet ? ' byos-pill-popover-sheet' : ''}`}>{props.children(close)}</Popover>;
   return <div className={`${props.className ?? 'byos byos-pill-root'}`} ref={rootRef}>
     <button
       type="button"
@@ -71,7 +81,7 @@ export function AiPill(props: AiPillProps) {
     >
       <i/> <span className={c.prefix ?? 'byos-pill-prefix'}>{props.prefix ?? 'AI'}</span><span className={c.label ?? 'byos-pill-label'}>{label}</span>
     </button>
-    {open && (matches(props.sheetQuery ?? '(max-width: 720px)')
+    {open && (sheet
       ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, props.portalContainer ?? document.body)
       : popover)}
   </div>;

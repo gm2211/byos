@@ -68,8 +68,6 @@
 .byos-pill-prefix { flex: none; }
 .byos-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; font: 400 12px $font; color: $text; }
 .byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid $line-strong; border-radius: $radius-lg; background: $surface; box-shadow: $shadow; color: $text; font: 400 14px/1.5 $font; text-align: left; }
+.byos-pill-popover-sheet { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: $radius-lg $radius-lg 0 0; }
 .byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: rgb(0 0 0 / .35); }
-@media (max-width: 720px) {
-  body > .byos-pill-popover { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: $radius-lg $radius-lg 0 0; }
-}
 @media (prefers-reduced-motion: reduce) { .byos-signin .byos-signin-primary, .byos-dialog-close { transition: none; } }
