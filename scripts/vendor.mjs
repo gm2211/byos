@@ -375,6 +375,10 @@ export async function vendor(options) {
     const all = await listPackages(pinnedSource);
     const requested = options.packages ?? [...all.keys()];
     const { selected } = selectClosure(all, requested);
+    if (options.mode === 'bundle') {
+      const local = selected.filter((id) => all.get(id).manifest.byos?.runtime === 'node');
+      if (local.length) fail(`Node-only packages cannot enter a browser bundle: ${local.join(', ')}. Use --mode packages for a local runtime.`);
+    }
     const generatedTargets = options.mode === 'packages'
       ? selected.map((id) => path.join(outDir, `${options.namePrefix}${id}`))
       : [path.join(outDir, options.bundleName), ...(options.engine === 'include' ? [path.join(outDir, 'engine')] : [])];

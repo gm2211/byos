@@ -2,6 +2,16 @@
 
 Keep one small binding layer in each application. Change provider behavior in this kit, then sync the reviewed commit into consumers. Do not edit generated bundles or vendored package source.
 
+## Local ChatGPT plan connections
+
+`@byos/chatgpt-local` provides a separate Node-only client for official ChatGPT plan usage. Consumer bindings supply the app name, unique Keychain namespace, and browser opener. Keep the client in the local application process and adapt safe status/model/result methods to your UI; never pass its token records through the existing browser `ByosProvider` contract.
+
+See the [package README](../packages/chatgpt-local/README.md) and [local example](../examples/chatgpt-local/server.mjs). The example verifies loopback peer, Host, Origin and CSRF before sign-in, account switching or inference. OAuth uses a separate, one-shot loopback callback with its own state/PKCE validation. Do not weaken normal UI routes to admit OAuth redirects.
+
+Choose a stable namespace per consumer; it separates account registration, host identity, credentials and refresh coordination. Native macOS Keychain is the default. Inject a protected store for other supported local runtimes. A storage failure is not permission to use plaintext persistence. No token import from Codex, no secret-bearing shell arguments, no automatic provider/billing fallback.
+
+Use package-mode full-SHA vendoring with `--packages chatgpt-local --engine omit`. Browser bundle mode rejects Node-only packages. Enable the new path explicitly; this does not change existing browser provider storage or relay bindings.
+
 ## Storage and session lifetime
 
 Use a stable, unique prefix for each application sharing an origin. Preserve existing prefixes during updates so saved accounts keep working. Credentials default to session-only storage; remember them only after an explicit user choice.

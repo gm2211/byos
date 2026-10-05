@@ -10,14 +10,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server",
-    "test": "npm run test -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server && node --test scripts/*.test.mjs",
+    "build": "npm run build -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local",
+    "test": "npm run test -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local && node --test scripts/*.test.mjs",
     "check": "npm run test && node scripts/verify-engine.mjs && npm run check:example",
     "vendor": "node scripts/vendor.mjs",
     "example": "npm run build -w @byos/core -w @byos/react && vite examples/react --host 127.0.0.1 --port 5184",
     "check:example": "tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck examples/react/main.tsx",
     "test:rust": "cargo +1.94.1 test --manifest-path packages/browser-tls/rust/Cargo.toml --locked",
-    "build:engine": "bash packages/browser-tls/scripts/build-engine.sh"
+    "build:engine": "bash packages/browser-tls/scripts/build-engine.sh",
+    "example:chatgpt": "npm run build -w @byos/chatgpt-local && node examples/chatgpt-local/server.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

@@ -114,6 +114,27 @@ test('stale generated packages are removed while unrelated consumer files surviv
   assert.equal(await readFile(path.join(out, 'consumer-note.txt'), 'utf8'), 'keep');
 });
 
+test('Node-only packages vendor normally but cannot replace a browser bundle', async (t) => {
+  const fx = await fixture();
+  t.after(() => rm(fx.root, { recursive: true, force: true }));
+  await fx.addPackage('chatgpt-local', { byos: { runtime: 'node' } });
+  for (const args of [['add', '.'], ['commit', '--quiet', '-m', 'local runtime fixture']]) {
+    const result = spawnSync('git', ['-C', fx.source, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  fx.ref = spawnSync('git', ['-C', fx.source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  const packageResult = await vendor(options(fx, { packages: ['chatgpt-local'] }));
+  const manifest = JSON.parse(await readFile(path.join(packageResult.outDir, 'site-chatgpt-local', 'package.json'), 'utf8'));
+  assert.equal(manifest.byos.runtime, 'node');
+  const out = path.join(fx.root, 'browser');
+  await mkdir(out);
+  await writeFile(path.join(out, 'byos.js'), 'old bundle');
+  await writeFile(path.join(out, 'REVISION'), 'old revision');
+  await assert.rejects(vendor(options(fx, { packages: ['chatgpt-local'], mode: 'bundle', out })), /Node-only packages cannot enter a browser bundle/);
+  assert.equal(await readFile(path.join(out, 'byos.js'), 'utf8'), 'old bundle');
+  assert.equal(await readFile(path.join(out, 'REVISION'), 'utf8'), 'old revision');
+});
+
 test('engine validation failure preserves current output and revision', async (t) => {
   const fx = await fixture();
   t.after(() => rm(fx.root, { recursive: true, force: true }));

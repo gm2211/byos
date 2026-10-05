@@ -25,5 +25,16 @@
     ],
     "output": "src/tracked/app/static/vendor/byos",
     "engine": "include"
+  },
+  "jev-polls": {
+    "repository": "gm2211/jev-polls",
+    "mode": "packages",
+    "packages": [
+      "chatgpt-local"
+    ],
+    "output": "vendor",
+    "namePrefix": "byos-",
+    "revision": "vendor/BYOS_REVISION",
+    "engine": "omit"
   }
 }
