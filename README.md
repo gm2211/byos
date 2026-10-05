@@ -1,6 +1,6 @@
 # BYOS — bring your own subscription
 
-Reusable browser-owned AI connections for applications that let people use their own subscriptions or API keys. The kit owns provider behavior; each application owns its branding, storage namespace, session binding, provider choices, and policy gates.
+Reusable local and browser-owned AI connections for applications that let people use their own subscriptions or API keys. The kit owns provider behavior; each application owns its branding, storage namespace, session binding, provider choices, and policy gates.
 
 ## Start here
 
@@ -11,10 +11,11 @@ npm ci
 npm run check
 ```
 
-Node 22.23.2 or newer is required. One locked workspace builds and tests all six packages in dependency order. `npm run check` also verifies the reviewed TLS engine hashes and consumer vendoring tests. GitHub Actions runs the same gate.
+Node 22.23.2 or newer is required. One locked workspace builds and tests all packages in dependency order. `npm run check` also verifies the reviewed TLS engine hashes and consumer vendoring tests. GitHub Actions runs the same gate.
 
 | Package | Purpose |
 | --- | --- |
+| `@byos/chatgpt-local` | Official ChatGPT plan sign-in for local Node apps; Keychain and direct HTTPS, no tunnel |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/providers` | Browser provider adapters, sign-in, model discovery, streaming chat |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
@@ -24,6 +25,20 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all six
 
 Run `npm run example` for the synthetic, provider-free React customization playground.
 Each package README documents its API. [Customization recipes](docs/customization.md) cover branding, localization, persistence, provider selection, cookie/header sessions, and updates.
+
+## Use ChatGPT without the browser TLS tunnel
+
+For a local app, use `@byos/chatgpt-local`. It implements the official [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source) flow and calls `https://api.openai.com/v1/responses` directly from the user's local Node process. No Codex executable, API key, custom TLS engine, WASM, or ciphertext relay is required.
+
+```sh
+npm run example:chatgpt
+```
+
+Open the printed loopback URL, choose **Continue with ChatGPT**, authorize plan usage, select a model, and send a prompt. The example uses macOS Keychain and fails clearly if protected credential storage is unavailable. It never imports your Codex login. Other platforms need an explicitly supplied protected credential-store implementation; they do not silently fall back to plaintext files.
+
+Eligible Plus/Pro users share their existing plan allowance. A successful connection is not proof of inference: wait for a completed response. Local personal/open-source usage follows OpenAI's current eligibility rules; paid or remotely hosted applications need the applicable OpenAI approval. The independently authored adapter does not include the noncommercial Sign in with ChatGPT DevKit.
+
+Use the [local package API](packages/chatgpt-local/README.md) for a consumer binding. Keep tokens inside the local runtime; expose only account metadata, model choices, and requested results to the UI. Existing `@byos/codex` browser integrations retain their previous transport and can migrate separately.
 
 ## Consume a pinned revision
 
@@ -43,11 +58,13 @@ node scripts/vendor.mjs --source . --ref "$(git rev-parse HEAD)" --mode bundle \
 
 Use a full commit SHA for reproducible updates. The utility exports committed source, includes transitive local dependencies, rewrites package links, and validates staged output before replacing managed files. Bundles use the locked esbuild dependency, without runtime npm downloads. TLS engine files are verified against their manifest before copying. Consumer repositories commit the generated output and revision record so production builds need no private GitHub access.
 
-[consumers.json](consumers.json) records the current bindings: Motive uses TypeScript/React packages and its own reviewed engine build; Tracked uses an ES module and the kit's reviewed engine. Both update through `scripts/sync-byos.sh [commit-or-ref]`. Application changes stay in their wrappers, never in vendored source.
+[consumers.json](consumers.json) records the bindings: Jev Polls uses the local ChatGPT package for draft generation; Motive uses TypeScript/React packages and its own reviewed engine build; Tracked uses an ES module and the kit's reviewed engine. Browser consumers update through `scripts/sync-byos.sh [commit-or-ref]`. Application changes stay in their wrappers, never in vendored source.
 
 ## Credential boundary
 
-Provider credentials live in the browser. For providers whose existing device-code flow uses a disclosed initial exchange, the broker returns the token once and never persists or logs it; later model requests go directly from browser to provider. Manual token import never calls the application's backend.
+For `@byos/chatgpt-local`, credentials live in the user-owned local process and OS credential store. Its HTTPS requests go straight to official OpenAI endpoints. UI routes must be loopback-only, verify Host/Origin, protect mutations against CSRF, and never return tokens. This path is not a credential proxy for a hosted multi-user application.
+
+For existing browser adapters, provider credentials live in the browser. For providers whose existing device-code flow uses a disclosed initial exchange, the broker returns the token once and never persists or logs it; later model requests go directly from browser to provider. Manual token import never calls the application's backend.
 
 Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed OpenAI destinations; it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
 
