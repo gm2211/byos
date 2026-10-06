@@ -163,7 +163,7 @@ relay.handleUpgrade(httpServer);
 
 1. Change the kit and run `npm run check`.
 2. Commit and review the kit PR; retain its full commit SHA.
-3. Run each consumer's `scripts/sync-byos.sh <SHA>`.
+3. Run each consumer's sync script with the full SHA, using its recorded package/bundle configuration.
 4. Build/test the affected consumer bindings and inspect affected UI states.
 5. Commit generated files and revision record together. Release each application under its own procedure.
 

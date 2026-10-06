@@ -173,3 +173,63 @@ test('OpenRouter PKCE exchange rejects redirects and redacts code and verifier e
   });
   assert.equal(calls[0].init?.redirect, 'error');
 });
+
+
+function openRouterFixture(credentialPersistence?: 'browser' | 'session') {
+  const id = ++signInCounter;
+  const key = `test-or-key-${id}`;
+  const transaction = `test-or-transaction-${id}`;
+  return { key, transaction, flow: createOpenRouterSignIn({
+    keyStorageKey: key, transactionStorageKey: transaction,
+    handoffChannel: `test-or-channel-${id}`, handoffFallbackKey: `test-or-fallback-${id}`,
+    credentialPersistence,
+  }) };
+}
+
+test('OpenRouter session exchange keeps its credential out of localStorage', async () => {
+  const { key, transaction, flow } = openRouterFixture('session');
+  flow.storePkceTransaction({ verifier: 'fake-verifier', createdAt: Date.now(), returnRoute: '#research' });
+  const originalFetch = globalThis.fetch;
+  try {
+    const calls = fakeFetch(() => new Response(JSON.stringify({ key: 'fake-session-key' })));
+    assert.equal(await flow.complete('fake-code'), 'fake-session-key');
+    assert.equal(calls.length, 1);
+    assert.equal(sessionStorage.getItem(key), 'fake-session-key');
+    assert.equal(localStorage.getItem(key), null);
+    assert.equal(sessionStorage.getItem(transaction), null);
+    assert.equal(localStorage.getItem(transaction), null);
+    flow.clearKey();
+    assert.equal(flow.getStoredKey(), '');
+    assert.equal(sessionStorage.getItem(key), null);
+    assert.equal(localStorage.getItem(key), null);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('OpenRouter session mode migrates legacy keys and preserves current tab selection', () => {
+  const { key, flow } = openRouterFixture('session');
+  localStorage.setItem(key, 'fake-legacy-key');
+  assert.equal(flow.getStoredKey(), 'fake-legacy-key');
+  assert.equal(sessionStorage.getItem(key), 'fake-legacy-key');
+  assert.equal(localStorage.getItem(key), null);
+  localStorage.setItem(key, 'fake-other-tab-key');
+  assert.equal(flow.getStoredKey(), 'fake-legacy-key');
+  assert.equal(localStorage.getItem(key), null);
+  flow.storeKey('fake-replacement');
+  assert.equal(sessionStorage.getItem(key), 'fake-replacement');
+  assert.equal(localStorage.getItem(key), null);
+  flow.clearKey();
+  assert.equal(flow.getStoredKey(), '');
+});
+
+test('OpenRouter default mode retains browser persistence and disconnect tombstones', () => {
+  const { key, flow } = openRouterFixture();
+  sessionStorage.setItem(key, 'fake-session-legacy');
+  assert.equal(flow.getStoredKey(), 'fake-session-legacy');
+  assert.equal(localStorage.getItem(key), 'fake-session-legacy');
+  assert.equal(sessionStorage.getItem(key), null);
+  flow.clearKey();
+  sessionStorage.setItem(key, 'fake-stale-tab');
+  assert.equal(flow.getStoredKey(), '');
+  assert.equal(localStorage.getItem(key), '');
+  assert.equal(sessionStorage.getItem(key), null);
+});

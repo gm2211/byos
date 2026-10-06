@@ -36,5 +36,27 @@
     "namePrefix": "byos-",
     "revision": "vendor/BYOS_REVISION",
     "engine": "omit"
+  },
+  "landgrab": {
+    "repository": "gm2211/landgrab",
+    "mode": "packages",
+    "packages": [
+      "core",
+      "providers"
+    ],
+    "output": "shared",
+    "namePrefix": "byos-",
+    "revision": "shared/BYOS_REVISION",
+    "engine": "omit"
+  },
+  "trim-lab": {
+    "repository": "gm2211/trim-lab",
+    "mode": "bundle",
+    "packages": [
+      "core",
+      "providers"
+    ],
+    "output": "vendor/byos",
+    "engine": "omit"
   }
 }
