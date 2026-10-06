@@ -45,9 +45,28 @@ export async function completedText(response: Response, secrets: string[], signa
   if (!response.body) throw new ChatGptError('invalid-response');
   const reader = response.body.getReader(); const decoder = new TextDecoder('utf8', { fatal: true });
   let buffer = '', total = 0, result: string | undefined;
+  // Some Responses streams put full content only in output_item.done, leaving the final
+  // response.output empty. These are candidates, never successful output before completion.
+  const completedItems = new Map<number, Record<string, unknown>>();
+  const phases = new Map<number, string>();
+  let completedChars = 0;
+  function itemText(item: unknown, index: number): string[] {
+    if (!record(item)) throw new ChatGptError('invalid-response');
+    if (['function_call', 'custom_tool_call', 'mcp_call', 'web_search_call'].includes(String(item.type))) throw new ChatGptError('unsupported');
+    if (item.type !== 'message' || item.role !== 'assistant') return [];
+    if (item.status !== undefined && item.status !== 'completed') throw new ChatGptError('invalid-response');
+    if (!Array.isArray(item.content)) throw new ChatGptError('invalid-response');
+    const parts: string[] = [];
+    for (const part of item.content) {
+      if (!record(part) || part.type === 'refusal') throw new ChatGptError('invalid-response');
+      if (part.type === 'output_text' && typeof part.text === 'string') parts.push(part.text);
+    }
+    return (item.phase ?? phases.get(index)) === 'commentary' ? [] : parts;
+  }
   function event(raw: string) {
     const data = raw.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n');
     if (!data || data === '[DONE]') return;
+    if (data.length > 2 * 1024 * 1024) throw new ChatGptError('invalid-response');
     if (secrets.some(s => s && data.includes(s))) throw new ChatGptError('invalid-response');
     const e: unknown = JSON.parse(data);
     if (!record(e)) throw new ChatGptError('invalid-response');
@@ -55,19 +74,28 @@ export async function completedText(response: Response, secrets: string[], signa
       const error = record(e.error) ? e.error : record(e.response) && record(e.response.error) ? e.response.error : undefined;
       throw providerError(error ?? e);
     }
-    if (e.type !== 'response.completed') return;
-    if (!record(e.response) || e.response.status !== 'completed' || e.response.incomplete_details || !Array.isArray(e.response.output)) throw new ChatGptError('invalid-response');
-    const parts: string[] = [];
-    for (const item of e.response.output) {
-      if (!record(item)) throw new ChatGptError('invalid-response');
-      if (['function_call', 'custom_tool_call', 'mcp_call', 'web_search_call'].includes(String(item.type))) throw new ChatGptError('unsupported');
-      if (item.type !== 'message' || item.role !== 'assistant' || item.phase === 'commentary') continue;
-      if (!Array.isArray(item.content)) throw new ChatGptError('invalid-response');
-      for (const part of item.content) {
-        if (!record(part) || part.type === 'refusal') throw new ChatGptError('invalid-response');
-        if (part.type === 'output_text' && typeof part.text === 'string') parts.push(part.text);
+    if (e.type === 'response.output_item.added' || e.type === 'response.output_item.done') {
+      if (!Number.isSafeInteger(e.output_index) || Number(e.output_index) < 0 || Number(e.output_index) >= 10_000 || !record(e.item)) throw new ChatGptError('invalid-response');
+      const index = e.output_index as number;
+      if (typeof e.item.phase === 'string') phases.set(index, e.item.phase);
+      if (['function_call', 'custom_tool_call', 'mcp_call', 'web_search_call'].includes(String(e.item.type))) throw new ChatGptError('unsupported');
+      if (e.type === 'response.output_item.done') {
+        if (completedItems.has(index)) throw new ChatGptError('invalid-response');
+        const parts = itemText(e.item, index);
+        completedChars += parts.reduce((size, part) => size + part.length, 0);
+        if (completedChars > 4 * 1024 * 1024) throw new ChatGptError('invalid-response');
+        completedItems.set(index, e.item);
       }
+      return;
     }
+    if (e.type !== 'response.completed') return;
+    if (!record(e.response) || e.response.status !== 'completed' || e.response.incomplete_details || (e.response.output != null && !Array.isArray(e.response.output))) throw new ChatGptError('invalid-response');
+    // A populated terminal snapshot is authoritative; combining both representations duplicates
+    // answers. For sparse snapshots, output_index (not arrival order) defines item order.
+    const items: Array<[number, unknown]> = Array.isArray(e.response.output) && e.response.output.length
+      ? e.response.output.map((item, index) => [index, item])
+      : [...completedItems.entries()].sort(([left], [right]) => left - right);
+    const parts = items.flatMap(([index, item]) => itemText(item, index));
     result = parts.join('\n');
     if (!result.trim() || result.length > 4 * 1024 * 1024 || secrets.some(secret => secret && result!.includes(secret))) throw new ChatGptError('invalid-response');
   }
