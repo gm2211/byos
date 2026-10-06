@@ -58,7 +58,7 @@ node scripts/vendor.mjs --source . --ref "$(git rev-parse HEAD)" --mode bundle \
 
 Use a full commit SHA for reproducible updates. The utility exports committed source, includes transitive local dependencies, rewrites package links, and validates staged output before replacing managed files. Bundles use the locked esbuild dependency, without runtime npm downloads. TLS engine files are verified against their manifest before copying. Consumer repositories commit the generated output and revision record so production builds need no private GitHub access.
 
-[consumers.json](consumers.json) records the bindings: Jev Polls uses the local ChatGPT package for draft generation; Motive uses TypeScript/React packages and its own reviewed engine build; Tracked uses an ES module and the kit's reviewed engine. Browser consumers update through `scripts/sync-byos.sh [commit-or-ref]`. Application changes stay in their wrappers, never in vendored source.
+[consumers.json](consumers.json) records the bindings: Jev Polls uses the local ChatGPT package for draft generation; Motive uses TypeScript/React packages and its own reviewed engine build; Tracked uses an ES module and the kit's reviewed engine. Landgrab uses the core/provider packages with its own browser storage bindings; Trim Lab embeds the core/provider browser bundle in its self-contained pages. Each consumer's sync script exports an immutable kit revision. Application changes stay in their wrappers, never in vendored source.
 
 ## Credential boundary
 

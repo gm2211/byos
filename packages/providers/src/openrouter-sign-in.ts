@@ -16,8 +16,12 @@ import { providerErrorText, redactProviderSecrets } from './chat.js';
  */
 
 export type OpenRouterSignInOptions = {
-  /** localStorage key holding the connected key. */
+  /** Browser storage key holding the connected key. */
   keyStorageKey: string;
+  /** Defaults to browser-wide persistence. Session mode keeps the key in this tab only.
+   * Legacy local keys migrate to the session and are removed from localStorage.
+   * PKCE transactions still use the short-lived local fallback for callback recovery. */
+  credentialPersistence?: 'browser' | 'session';
   /** Storage key holding the in-flight PKCE transaction. */
   transactionStorageKey: string;
   /** BroadcastChannel name for the credential-free "connected / disconnected / error" signal. */
@@ -72,6 +76,7 @@ async function challengeFor(verifier: string): Promise<string> {
 
 export function createOpenRouterSignIn(options: OpenRouterSignInOptions) {
   const KEY_STORAGE = options.keyStorageKey;
+  const SESSION_ONLY = options.credentialPersistence === 'session';
   const VERIFIER_STORAGE = options.transactionStorageKey;
   const HANDOFF_CHANNEL = options.handoffChannel;
   const HANDOFF_FALLBACK_KEY = options.handoffFallbackKey;
@@ -149,6 +154,12 @@ export function createOpenRouterSignIn(options: OpenRouterSignInOptions) {
   }
 
   function getStoredKey(): string {
+    if (SESSION_ONLY) {
+      const key = sessionStorage.getItem(KEY_STORAGE) ?? localStorage.getItem(KEY_STORAGE) ?? '';
+      if (key) sessionStorage.setItem(KEY_STORAGE, key);
+      localStorage.removeItem(KEY_STORAGE);
+      return key;
+    }
     const browserKey = localStorage.getItem(KEY_STORAGE);
     // An empty browser value is an explicit disconnect: an older tab's session key must not
     // resurrect it. Migrate existing session connections only when no browser decision exists.
@@ -162,13 +173,19 @@ export function createOpenRouterSignIn(options: OpenRouterSignInOptions) {
   }
 
   function storeKey(key: string): void {
+    if (SESSION_ONLY) {
+      sessionStorage.setItem(KEY_STORAGE, key);
+      localStorage.removeItem(KEY_STORAGE);
+      return;
+    }
     sessionStorage.removeItem(KEY_STORAGE);
     localStorage.setItem(KEY_STORAGE, key);
   }
 
   function clearKey(): void {
     sessionStorage.removeItem(KEY_STORAGE);
-    localStorage.setItem(KEY_STORAGE, '');
+    if (SESSION_ONLY) localStorage.removeItem(KEY_STORAGE);
+    else localStorage.setItem(KEY_STORAGE, '');
   }
 
   /** Starts sign-in in this tab and keeps the originating route in the PKCE transaction so the

@@ -18,3 +18,9 @@ Every call here runs in the browser and talks straight to the provider (all thre
 token never goes to the site's own server. `claude()` talks to api.anthropic.com with an API key. Claude subscriptions are paused
 (`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`): Anthropic's terms do not let third-party apps use Claude.ai
 sign-in, so a subscription token is refused before any request. Codex uses `@byos/browser-tls`.
+
+`createOpenRouterSignIn({ credentialPersistence: 'session', ... })` keeps the connected
+key in the current tab and migrates/removes legacy localStorage keys. The default
+`'browser'` preserves cross-tab persistence and disconnect tombstones. Session mode
+does not share keys across tabs; credential-free notifications cannot transfer them.
+PKCE transactions retain their bounded temporary local fallback for callback recovery.
