@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ChatGptError } from '@byos/chatgpt-local';
 import { createExampleServer } from '../examples/chatgpt-local/server.mjs';
 
 test('local UI bridge protects mutations and only returns completed safe output', async t => {
@@ -30,4 +31,21 @@ test('bridge does not expose unexpected client error text', async t => {
   const response = await fetch(example.origin + '/api/status');
   assert.equal(response.status, 400);
   assert.equal((await response.text()).includes('fake-secret-must-not-leak'), false);
+});
+
+test('bridge preserves actionable usage-limit errors without forwarding raw messages', async t => {
+  const example = await createExampleServer({ generate: async () => {
+    const error = new ChatGptError('quota');
+    error.message = 'fake-provider-secret-must-not-leak';
+    throw error;
+  } });
+  t.after(() => example.close());
+  const html = await (await fetch(example.origin)).text();
+  const csrf = html.match(/'X-Byos-CSRF':'([a-f0-9]+)'/)[1];
+  const response = await fetch(example.origin + '/api/generate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: example.origin, 'X-Byos-CSRF': csrf },
+    body: JSON.stringify({ model: 'test-model', input: 'Hello' }),
+  });
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { code: 'quota', error: 'ChatGPT usage is limited. Review your usage in ChatGPT settings.' });
 });
