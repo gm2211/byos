@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { ChatGptError } from '@byos/chatgpt-local';
 
 /** No provider credentials enter this HTTP bridge. The client stays in the local process. */
 export async function createExampleServer(client) {
@@ -60,8 +61,15 @@ export async function createExampleServer(client) {
         send(200, await client.generate({ model: input.model, input: input.input, signal: controller.signal })); return;
       }
       send(400, { error: 'Invalid request.' });
-    })().catch(() => {
-      if (!response.destroyed && !response.writableEnded) send(400, { error: 'Request did not complete. Check your connection or ChatGPT usage, then try again.' });
+    })().catch(error => {
+      if (response.destroyed || response.writableEnded) return;
+      if (error instanceof ChatGptError) {
+        // Rebuild fixed copy from the library code; never forward provider/error message text.
+        const safe = new ChatGptError(error.code);
+        send(error.code === 'quota' ? 429 : 400, { code: safe.code, error: safe.message });
+      } else {
+        send(400, { error: 'Request did not complete. Check your connection or ChatGPT usage, then try again.' });
+      }
     });
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
