@@ -8,6 +8,8 @@ Keep one small binding layer in each application. Change provider behavior in th
 
 See the [package README](../packages/chatgpt-local/README.md) and [local example](../examples/chatgpt-local/server.mjs). The example verifies loopback peer, Host, Origin and CSRF before sign-in, account switching or inference. OAuth uses a separate, one-shot loopback callback with its own state/PKCE validation. Do not weaken normal UI routes to admit OAuth redirects.
 
+`generate({ ..., onProgress })` optionally supplies metadata-only generation activity: observed phases and monotone UTF-16 output character counts, with no prompt, chunks, reasoning or summaries. Token counts are not estimated. Map this to application wording in the consumer binding; accept output only after the promise resolves and count domain items only after application validation. Callback exceptions are ignored and cancellation stops callbacks.
+
 Choose a stable namespace per consumer; it separates account registration, host identity, credentials and refresh coordination. Native macOS Keychain is the default. Inject a protected store for other supported local runtimes. A storage failure is not permission to use plaintext persistence. No token import from Codex, no secret-bearing shell arguments, no automatic provider/billing fallback.
 
 Use package-mode full-SHA vendoring with `--packages chatgpt-local --engine omit`. Browser bundle mode rejects Node-only packages. Enable the new path explicitly; this does not change existing browser provider storage or relay bindings.
