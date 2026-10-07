@@ -74,7 +74,11 @@ export async function completedText(response: Response, secrets: string[], signa
     if (terminal) return;
     const rank = ['starting', 'generating', 'receiving'].indexOf(phase);
     progressPhase = Math.max(progressPhase, rank);
-    try { onProgress?.({ phase: ['starting', 'generating', 'receiving'][progressPhase] as GenerationProgress['phase'], outputChars: observedChars }); }
+    try {
+      const outcome: unknown = onProgress?.({ phase: ['starting', 'generating', 'receiving'][progressPhase] as GenerationProgress['phase'], outputChars: observedChars });
+      // Async observers are not awaited, but their rejection must never become unhandled.
+      if (outcome) void Promise.resolve(outcome).catch(() => {});
+    }
     catch { /* Observers cannot change provider acceptance or turn a draft into success. */ }
     checkSignal(signal);
   }
@@ -83,7 +87,7 @@ export async function completedText(response: Response, secrets: string[], signa
     return value as number;
   }
   function observe(index: number, contentIndex: number, value: string, delta = false) {
-    if (phases.get(index) === 'commentary') return;
+    if (phases.get(index) === 'commentary') return false;
     const parts = observedParts.get(index) ?? new Map(); observedParts.set(index, parts);
     const part = parts.get(contentIndex) ?? { chars: 0, deltaChars: 0, tail: '' };
     if (delta) {
@@ -95,6 +99,7 @@ export async function completedText(response: Response, secrets: string[], signa
     const chars = Math.max(part.chars, delta ? part.deltaChars : value.length);
     observedChars += chars - part.chars; part.chars = chars; parts.set(contentIndex, part);
     if (observedChars > 4 * 1024 * 1024) throw new ChatGptError('invalid-response');
+    return true;
   }
   function observeItem(item: unknown, index: number) {
     if (!record(item) || item.type !== 'message' || item.role !== 'assistant' || !Array.isArray(item.content) || (item.phase ?? phases.get(index)) === 'commentary') return;
@@ -133,7 +138,8 @@ export async function completedText(response: Response, secrets: string[], signa
     if (e.type === 'response.output_text.delta') {
       const index = outputIndex(e.output_index), contentIndex = outputIndex(e.content_index ?? 0);
       if (typeof e.delta !== 'string') throw new ChatGptError('invalid-response');
-      observe(index, contentIndex, e.delta, true); progress('receiving'); return;
+      if (observe(index, contentIndex, e.delta, true)) progress('receiving');
+      return;
     }
     if (e.type === 'response.output_item.added' || e.type === 'response.output_item.done') {
       const index = outputIndex(e.output_index);
