@@ -217,3 +217,33 @@ test('abort while awaiting stream read prevents callback for newly received byte
   await assert.rejects(completedText(new Response(stream), [], controller.signal, () => { calls++; }), { code: 'canceled' });
   assert.equal(calls, 0); assert.equal(canceled, true);
 });
+
+test('commentary deltas do not claim receiving activity or hide later reasoning', async () => {
+  const seen: unknown[] = [];
+  assert.equal(await completedText(response([
+    { type: 'response.created' },
+    { type: 'response.output_item.added', output_index: 0, item: message('', { status: 'in_progress', phase: 'commentary' }) },
+    { type: 'response.output_text.delta', output_index: 0, delta: 'Working through it' },
+    itemDone(0, message('Working through it')),
+    { type: 'response.output_item.added', output_index: 1, item: { type: 'reasoning', summary: [] } },
+    { type: 'response.output_text.delta', output_index: 2, delta: 'Final' },
+    itemDone(2, message('Final', { phase: 'final_answer' })), completed(),
+  ], 3), [], undefined, value => { seen.push(value); }), 'Final');
+  assert.deepEqual(seen, [
+    { phase: 'starting', outputChars: 0 }, { phase: 'generating', outputChars: 0 },
+    { phase: 'receiving', outputChars: 5 }, { phase: 'receiving', outputChars: 5 },
+    { phase: 'receiving', outputChars: 5 },
+  ]);
+});
+
+test('rejected async observers are consumed without waiting or changing generation', async () => {
+  let calls = 0;
+  assert.equal(await completedText(response([
+    { type: 'response.created' }, completed({ output: [message('Complete')] }),
+  ]), [], undefined, async () => { calls++; throw new Error('Async observer failure'); }), 'Complete');
+  // Let unhandled rejection tracking run; node:test fails if observer rejection escaped.
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(calls, 2);
+  assert.equal(await completedText(response([completed({ output: [message('Complete')] })]), [], undefined,
+    () => new Promise<void>(() => {})), 'Complete');
+});
