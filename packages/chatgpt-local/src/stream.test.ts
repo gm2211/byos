@@ -108,3 +108,112 @@ test('abort after completed item prevents text return and closes stream', async 
   await assert.rejects(completedText(new Response(stream), [], controller.signal), { code: 'canceled' });
   assert.equal(canceled, true);
 });
+
+test('fragmented UTF-8 SSE emits only monotone observed metadata without snapshot double counting', async () => {
+  const seen: unknown[] = [];
+  const events = [
+    { type: 'response.created', response: { status: 'in_progress', output: [] } },
+    { type: 'response.in_progress', response: { status: 'in_progress' } },
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'reasoning', summary: [] } },
+    { type: 'response.reasoning_summary_text.delta', delta: 'Private internal reasoning' },
+    { type: 'response.output_item.added', output_index: 1, item: message('', { status: 'in_progress' }) },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: 'Hi ' },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: '🙂' },
+    itemDone(1, message('Hi 🙂')), completed({ output: [{ type: 'reasoning', summary: [] }, message('Hi 🙂')] }),
+    { type: 'response.output_text.delta', output_index: 1, delta: 'Ignored after completion' },
+  ];
+  assert.equal(await completedText(response(events, 1), [], undefined, value => seen.push(value)), 'Hi 🙂');
+  assert.deepEqual(seen, [
+    { phase: 'starting', outputChars: 0 }, { phase: 'starting', outputChars: 0 },
+    { phase: 'generating', outputChars: 0 }, { phase: 'generating', outputChars: 0 },
+    { phase: 'receiving', outputChars: 3 }, { phase: 'receiving', outputChars: 5 },
+    { phase: 'receiving', outputChars: 5 }, { phase: 'receiving', outputChars: 5 },
+  ]);
+  assert.doesNotMatch(JSON.stringify(seen), /Private|Ignored|delta|summary|outputTokens/);
+});
+
+test('observed parts count each content index and sparse completed item exactly once', async () => {
+  const seen: number[] = [];
+  const multi = message('', { content: [{ type: 'output_text', text: 'One' }, { type: 'output_text', text: 'Two!' }] });
+  assert.equal(await completedText(response([
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: 'One' },
+    { type: 'response.output_text.delta', output_index: 0, content_index: 1, delta: 'Two' },
+    itemDone(0, multi), itemDone(1, message('More')), completed(),
+  ]), [], undefined, value => seen.push(value.outputChars)), 'One\nTwo!\nMore');
+  assert.deepEqual(seen, [3, 6, 7, 11, 11]);
+});
+
+test('terminal-only output supplies observed metrics and observer exceptions never fail generation', async () => {
+  let calls = 0;
+  assert.equal(await completedText(response([completed({ output: [message('Complete')] })]), [], undefined, value => {
+    calls++; assert.deepEqual(value, { phase: 'receiving', outputChars: 8 }); throw new Error('Observer failure');
+  }), 'Complete');
+  assert.equal(calls, 1);
+});
+
+test('phase and character progress never regress with a smaller authoritative final snapshot', async () => {
+  const seen: unknown[] = [];
+  assert.equal(await completedText(response([
+    itemDone(0, message('Long draft')), { type: 'response.in_progress' },
+    { type: 'response.output_item.added', output_index: 1, item: { type: 'reasoning' } },
+    completed({ output: [message('Final')] }),
+  ]), [], undefined, value => seen.push(value)), 'Final');
+  assert.deepEqual(seen, Array.from({ length: 4 }, () => ({ phase: 'receiving', outputChars: 10 })));
+});
+
+for (const event of [
+  { type: 'response.output_text.delta', output_index: 0, delta: 'synthetic-secret' },
+  { type: 'response.reasoning_summary_text.delta', delta: 'synthetic-secret' },
+  itemDone(0, message('synthetic-secret')),
+  completed({ output: [message('synthetic-secret')] }),
+  'data: {"type":"response.output_text.delta","output_index":0,"delta":"synthetic-\\u0073ecret"}\n\n',
+]) {
+  test('raw and decoded credential filtering runs before progress callback', async () => {
+    let calls = 0;
+    await assert.rejects(completedText(response([event]), ['synthetic-secret'], undefined, () => { calls++; }), { code: 'invalid-response' });
+    assert.equal(calls, 0);
+  });
+}
+
+test('credentials split across output deltas are rejected before matching progress is emitted', async () => {
+  const seen: number[] = [];
+  await assert.rejects(completedText(response([
+    { type: 'response.output_text.delta', output_index: 0, delta: 'synthetic-' },
+    { type: 'response.output_text.delta', output_index: 0, delta: 'secret' },
+    completed({ output: [message('Other answer')] }),
+  ]), ['synthetic-secret'], undefined, value => seen.push(value.outputChars)), { code: 'invalid-response' });
+  assert.deepEqual(seen, [10]);
+});
+
+for (const tail of [
+  'data: malformed\n\n',
+  { type: 'response.failed', response: { error: { code: 'rate_limit_exceeded' } } },
+  { type: 'response.incomplete', response: { status: 'incomplete' } },
+]) {
+  test('partial progress cannot hide malformed streams or terminal failures', async () => {
+    const seen: unknown[] = [];
+    await assert.rejects(completedText(response([
+      { type: 'response.output_text.delta', output_index: 0, delta: 'Draft' }, tail,
+      completed({ output: [message('Final')] }),
+    ]), [], undefined, value => seen.push(value)));
+    assert.deepEqual(seen, [{ phase: 'receiving', outputChars: 5 }]);
+  });
+}
+
+test('abort in progress observer cancels stream and suppresses all later callbacks', async () => {
+  const controller = new AbortController(); const seen: unknown[] = [];
+  await assert.rejects(completedText(response([
+    { type: 'response.created' }, itemDone(0, message('Draft')), completed(),
+  ]), [], controller.signal, value => { seen.push(value); controller.abort(); }), { code: 'canceled' });
+  assert.deepEqual(seen, [{ phase: 'starting', outputChars: 0 }]);
+});
+
+test('abort while awaiting stream read prevents callback for newly received bytes', async () => {
+  const controller = new AbortController(); let calls = 0, canceled = false;
+  const stream = new ReadableStream({ async pull(s) {
+    await Promise.resolve(); controller.abort();
+    s.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(completed({ output: [message('Draft')] }))}\n\n`));
+  }, cancel() { canceled = true; } });
+  await assert.rejects(completedText(new Response(stream), [], controller.signal, () => { calls++; }), { code: 'canceled' });
+  assert.equal(calls, 0); assert.equal(canceled, true);
+});

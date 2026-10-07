@@ -70,7 +70,9 @@ test('native-runtime flow persists registration, discovers models and accepts on
   assert.equal(status.connected, true); assert.equal(status.planEnabled, true); assert.equal(f.controls.prompt, 'consent');
   assert.deepEqual(await f.another().status(), status);
   assert.deepEqual(await f.client.listModels(), [{ id: 'test-model', name: 'Test model' }]);
-  assert.deepEqual(await f.client.generate({ model: 'test-model', input: 'Draft', instructions: 'JSON only' }), { text: '{"draft":true}' });
+  const progress: unknown[] = [];
+  assert.deepEqual(await f.client.generate({ model: 'test-model', input: 'Draft', instructions: 'JSON only', onProgress: value => progress.push(value) }), { text: '{"draft":true}' });
+  assert.deepEqual(progress, [{ phase: 'receiving', outputChars: 14 }]);
   assert.equal(f.controls.requestBody.store, false); assert.equal(f.controls.requestBody.stream, true);
   assert.equal(f.controls.requestBody.instructions, 'JSON only'); assert.ok(Array.isArray(f.controls.requestBody.input));
   assert.ok(!JSON.stringify(status).includes('first-access'));

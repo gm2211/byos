@@ -6,6 +6,8 @@ import { authorize, discover, verifyIdentity } from './oauth.js';
 import { RESOURCE, TOKEN, request, ensureOk, json, text, record, completedText } from './http.js';
 export { ChatGptError, type ChatGptErrorCode } from './errors.js';
 export type { CredentialStore } from './storage.js';
+export type { GenerationProgress } from './http.js';
+import type { GenerationProgress } from './http.js';
 export type ChatGptAccount = { id: string; label: string; connected: boolean };
 export type ChatGptStatus = { connected: boolean; planEnabled: boolean; account?: ChatGptAccount };
 export type ChatGptModel = { id: string; name: string };
@@ -25,7 +27,7 @@ export interface ChatGptClient {
   signIn(options?: { signal?: AbortSignal; accountId?: string; enablePlan?: boolean }): Promise<ChatGptStatus>;
   disconnect(): Promise<{ revoked: boolean }>;
   listModels(signal?: AbortSignal): Promise<ChatGptModel[]>;
-  generate(request: { model: string; input: string; instructions?: string; signal?: AbortSignal }): Promise<{ text: string }>;
+  generate(request: { model: string; input: string; instructions?: string; signal?: AbortSignal; onProgress?: (progress: GenerationProgress) => void }): Promise<{ text: string }>;
 }
 type Tokens = { access: string; refresh?: string; id?: string; expiresAt: number; scopes: string[]; earliestRefreshAt?: number };
 type Registration = { id: string; label: string; clientId: string; subject?: string; tokens?: Tokens };
@@ -211,7 +213,7 @@ export function createChatGptClient(options: ChatGptClientOptions): ChatGptClien
       if (!text(input.model, 128) || /\s/.test(input.model) || typeof input.input !== 'string' || !input.input.trim() || input.input.length > 1_000_000 || (input.instructions !== undefined && (typeof input.instructions !== 'string' || input.instructions.length > 1_000_000))) throw new ChatGptError('unsupported');
       const response = await request(fetcher, `${RESOURCE}/responses`, { method: 'POST', headers: { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ model: input.model, input: [{ role: 'user', content: [{ type: 'input_text', text: input.input }] }], ...(input.instructions ? { instructions: input.instructions } : {}), store: false, stream: true }) }, signal, 10 * 60_000);
       await ensureOk(response);
-      const result = await completedText(response, [t.access, t.refresh ?? '', t.id ?? ''], signal);
+      const result = await completedText(response, [t.access, t.refresh ?? '', t.id ?? ''], signal, input.onProgress);
       return { text: result };
     }, input.signal),
   };

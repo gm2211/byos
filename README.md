@@ -38,7 +38,7 @@ Open the printed loopback URL, choose **Continue with ChatGPT**, authorize plan 
 
 Eligible Plus/Pro users share their existing plan allowance. A successful connection is not proof of inference: wait for a completed response. Local personal/open-source usage follows OpenAI's current eligibility rules; paid or remotely hosted applications need the applicable OpenAI approval. The independently authored adapter does not include the noncommercial Sign in with ChatGPT DevKit.
 
-Use the [local package API](packages/chatgpt-local/README.md) for a consumer binding. Keep tokens inside the local runtime; expose only account metadata, model choices, and requested results to the UI. Existing `@byos/codex` browser integrations retain their previous transport and can migrate separately.
+Use the [local package API](packages/chatgpt-local/README.md) for a consumer binding. Keep tokens inside the local runtime; expose only account metadata, model choices, optional generation activity metadata, and requested results to the UI. Existing `@byos/codex` browser integrations retain their previous transport and can migrate separately.
 
 ## Consume a pinned revision
 
