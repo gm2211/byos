@@ -118,7 +118,7 @@ Account. Provider changes, account controls, and tool actions remain application
 />
 ```
 
-React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
+React 18 and 19 are supported, including nullable DOM refs in menus and popovers. React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
 your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
 
 
@@ -134,3 +134,5 @@ your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
   disclosure={<p>ChatGPT identity signs in to this app. It does not connect an AI plan.</p>}
 />
 ```
+
+Set `AiAccountSettings.keepPanelsMounted` for host-owned sign-in or download workflows that must survive tab changes. Inactive panels use HTML `hidden`, with distinct panel IDs and matching `aria-controls`; default behavior still mounts only the active pane.

@@ -282,3 +282,18 @@ test('SignInWithChatGPT presents the approved route, identity-only disclosure, a
     assert.doesNotMatch(inactive, /href="\/auth\/chatgpt\/start"/);
   }
 });
+
+
+test('kept settings panes are hidden and each tab controls its own panel', () => {
+  const html = renderToStaticMarkup(createElement(AiAccountSettings, {
+    providerName: 'Local', onChangeProvider: () => undefined, keepPanelsMounted: true,
+    modelSettings: 'model pane', accountSettings: 'account pane', toolsSettings: 'tools pane',
+  }));
+  assert.match(html, /model pane/);
+  assert.match(html, /account pane/);
+  assert.match(html, /tools pane/);
+  const panels = [...html.matchAll(/<div id="([^"]+)"[^>]*role="tabpanel"[^>]*>/g)];
+  assert.equal(panels.length, 3);
+  assert.equal(panels.filter(panel => panel[0].includes('hidden=""')).length, 2);
+  for (const panel of panels) assert.ok(html.includes(`aria-controls="${panel[1]}"`));
+});
