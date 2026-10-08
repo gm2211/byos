@@ -99,6 +99,33 @@
 .byos-searchable-select--compact .byos-searchable-select-toggle { width: 44px; }
 @media (max-width: 720px) { .byos-searchable-options > .byos-searchable-option { min-height: 44px; } }
 
+.byos-account-settings { display: grid; gap: 12px; min-width: 0; color: $text; font: 400 14px/1.45 $font; }
+.byos-account-settings-header { display: grid; gap: 8px; min-width: 0; }
+.byos-account-settings-header h2 { margin: 0; color: $text; font: 600 17px/1.25 $font; }
+.byos-account-settings-provider { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.byos-account-settings-provider strong { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.byos-account-settings-status { color: $warning; font-size: 12px; }
+.byos-account-settings-change { min-height: 44px; margin-left: auto; padding: 0 10px; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; color: $text; font: 600 13px/1.3 $font; cursor: pointer; }
+.byos-account-settings-change:hover { background: $secondary-hover; }
+.byos-account-settings-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; }
+.byos-account-settings-tabs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.byos-account-settings-tab { min-width: 0; min-height: 44px; padding: 4px 8px; border: 1px solid transparent; border-radius: calc($radius - 2px); background: transparent; color: $muted; font: 500 13px/1.3 $font; cursor: pointer; }
+.byos-account-settings-tab[aria-selected="true"] { border-color: $line-strong; background: $surface; color: $text; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.byos-account-settings-tab:only-child { grid-column: 1 / -1; }
+.byos-account-settings-panel { min-width: 0; }
+.byos-account-settings-expired { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 10px; color: $muted; font-size: 12px; line-height: 1.4; }
+.byos-account-settings-expired button { position: relative; isolation: isolate; min-height: 44px; padding: 6px 8px; border: 0; border-radius: $radius; background: transparent; color: $text; font: 600 12px/1.3 $font; cursor: pointer; }
+.byos-account-settings-expired button::before { content: ''; position: absolute; inset: 6px 0; z-index: -1; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; }
+.byos-account-settings-expired button:hover::before { background: $secondary-hover; }
+.byos-account-settings-recovery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.byos-provider-picker { display: grid; gap: 6px; min-width: 0; color: $text; font: 400 14px/1.4 $font; }
+.byos-provider-choice { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid $line; border-radius: $radius; background: $surface; color: $text; font: 500 13px/1.3 $font; text-align: left; cursor: pointer; }
+.byos-provider-choice:hover { border-color: $line-strong; background: $surface-soft; }
+.byos-provider-choice-selected { border-color: $accent; background: $surface-soft; }
+.byos-provider-choice-name { min-width: 0; overflow-wrap: anywhere; }
+.byos-provider-choice-badge { color: $muted; font-size: 11px; }
+.byos-provider-choice-selected-label { margin-left: auto; color: $accent; font-size: 11px; font-weight: 600; }
+
 .byos-dialog-close { width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid $line; border-radius: $radius; background: $surface-raised; color: $muted; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
 .byos-dialog-close:hover { border-color: $line-strong; background: $surface-soft; color: $text; }
 .byos-dialog-close:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }

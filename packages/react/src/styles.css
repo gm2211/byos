@@ -99,6 +99,33 @@
 .byos-searchable-select--compact .byos-searchable-select-toggle { width: 44px; }
 @media (max-width: 720px) { .byos-searchable-options > .byos-searchable-option { min-height: 44px; } }
 
+.byos-account-settings { display: grid; gap: 12px; min-width: 0; color: var(--byos-text, #1b1f27); font: 400 14px/1.45 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-account-settings-header { display: grid; gap: 8px; min-width: 0; }
+.byos-account-settings-header h2 { margin: 0; color: var(--byos-text, #1b1f27); font: 600 17px/1.25 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-account-settings-provider { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.byos-account-settings-provider strong { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.byos-account-settings-status { color: var(--byos-warning, #b26b00); font-size: 12px; }
+.byos-account-settings-change { min-height: 44px; margin-left: auto; padding: 0 10px; border: 1px solid var(--byos-secondary-border, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-secondary-fill, #f6f7f9); color: var(--byos-text, #1b1f27); font: 600 13px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-account-settings-change:hover { background: var(--byos-secondary-hover, #eef0f4); }
+.byos-account-settings-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid var(--byos-line, #e2e5eb); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-soft, #f6f7f9); }
+.byos-account-settings-tabs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.byos-account-settings-tab { min-width: 0; min-height: 44px; padding: 4px 8px; border: 1px solid transparent; border-radius: calc(var(--byos-radius, 8px) - 2px); background: transparent; color: var(--byos-muted, #5a6272); font: 500 13px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-account-settings-tab[aria-selected="true"] { border-color: var(--byos-line-strong, #cdd2da); background: var(--byos-surface, #ffffff); color: var(--byos-text, #1b1f27); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.byos-account-settings-tab:only-child { grid-column: 1 / -1; }
+.byos-account-settings-panel { min-width: 0; }
+.byos-account-settings-expired { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 10px; color: var(--byos-muted, #5a6272); font-size: 12px; line-height: 1.4; }
+.byos-account-settings-expired button { position: relative; isolation: isolate; min-height: 44px; padding: 6px 8px; border: 0; border-radius: var(--byos-radius, 8px); background: transparent; color: var(--byos-text, #1b1f27); font: 600 12px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-account-settings-expired button::before { content: ''; position: absolute; inset: 6px 0; z-index: -1; border: 1px solid var(--byos-secondary-border, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-secondary-fill, #f6f7f9); }
+.byos-account-settings-expired button:hover::before { background: var(--byos-secondary-hover, #eef0f4); }
+.byos-account-settings-recovery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.byos-provider-picker { display: grid; gap: 6px; min-width: 0; color: var(--byos-text, #1b1f27); font: 400 14px/1.4 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-provider-choice { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--byos-line, #e2e5eb); border-radius: var(--byos-radius, 8px); background: var(--byos-surface, #ffffff); color: var(--byos-text, #1b1f27); font: 500 13px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); text-align: left; cursor: pointer; }
+.byos-provider-choice:hover { border-color: var(--byos-line-strong, #cdd2da); background: var(--byos-surface-soft, #f6f7f9); }
+.byos-provider-choice-selected { border-color: var(--byos-accent, #2f5bd3); background: var(--byos-surface-soft, #f6f7f9); }
+.byos-provider-choice-name { min-width: 0; overflow-wrap: anywhere; }
+.byos-provider-choice-badge { color: var(--byos-muted, #5a6272); font-size: 11px; }
+.byos-provider-choice-selected-label { margin-left: auto; color: var(--byos-accent, #2f5bd3); font-size: 11px; font-weight: 600; }
+
 .byos-dialog-close { width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--byos-line, #e2e5eb); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-raised, #eef0f4); color: var(--byos-muted, #5a6272); cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
 .byos-dialog-close:hover { border-color: var(--byos-line-strong, #cdd2da); background: var(--byos-surface-soft, #f6f7f9); color: var(--byos-text, #1b1f27); }
 .byos-dialog-close:focus-visible { outline: 2px solid var(--byos-accent, #2f5bd3); outline-offset: 2px; }

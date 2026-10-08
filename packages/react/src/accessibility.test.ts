@@ -5,6 +5,54 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AiPill } from '../dist/AiPill.js';
 import { ModelEffortPicker } from '../dist/ModelEffortPicker.js';
 import { AiQuickSettingsPanel } from '../dist/AiQuickSettingsPanel.js';
+import { AiAccountSettings } from '../dist/AiAccountSettings.js';
+import { AiProviderPicker } from '../dist/AiProviderPicker.js';
+import { DeviceCodeSignIn } from '../dist/DeviceCodeSignIn.js';
+
+test('AiAccountSettings starts on Model, exposes provider switching, and mounts one settings pane', () => {
+  const html = renderToStaticMarkup(createElement(AiAccountSettings, {
+    providerName: 'Acme AI', onChangeProvider: () => undefined,
+    modelSettings: createElement('p', null, 'Model controls'),
+    accountSettings: createElement('p', null, 'Remember and disconnect'),
+    toolsSettings: createElement('p', null, 'Tool access'),
+  }));
+  assert.match(html, /AI settings/);
+  assert.match(html, /Change AI service/);
+  assert.match(html, /aria-selected="true" aria-controls="_R_.*-panel"/);
+  assert.match(html, /Model controls/);
+  assert.doesNotMatch(html, /Remember and disconnect|Tool access/);
+});
+
+test('AiAccountSettings keeps expired recovery in Account and gives Model a compact route to it', () => {
+  const html = renderToStaticMarkup(createElement(AiAccountSettings, {
+    providerName: 'Acme AI', expired: true, onChangeProvider: () => undefined,
+    modelSettings: createElement('p', null, 'Model controls'),
+    accountSettings: createElement('p', null, 'Account controls'),
+    recoveryAction: createElement('button', null, 'Reconnect'),
+  }));
+  assert.match(html, /Reconnect to use AI\./);
+  assert.match(html, />Account<\/button>/);
+  assert.doesNotMatch(html, />Reconnect<\/button>/);
+});
+
+test('AiProviderPicker labels provider choices and marks the selected option', () => {
+  const html = renderToStaticMarkup(createElement(AiProviderPicker, {
+    providers: [{ id: 'a', name: 'Acme', badge: 'Plan' }, { id: 'b', name: 'Beta' }],
+    selectedId: 'a', onSelect: () => undefined,
+  }));
+  assert.match(html, /aria-label="Choose an AI service"/);
+  assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /Plan/);
+  assert.match(html, /aria-pressed="false"/);
+});
+
+test('DeviceCodeSignIn exposes an optional focusable dialog heading', () => {
+  const html = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+    providerName: 'Acme', headingId: 'guided-start-heading', status: 'idle', device: null,
+    connected: false, onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+  }));
+  assert.match(html, /<h3 id="guided-start-heading" tabindex="-1">Connect your Acme account<\/h3>/);
+});
 
 test('AiQuickSettingsPanel exposes the provider, settings action, expired notice, and recovery slot', () => {
   const html = renderToStaticMarkup(createElement(AiQuickSettingsPanel, {

@@ -106,6 +106,8 @@ function SignInCode({ code, strings }: { code: string; strings: DeviceCodeSignIn
 
 export type DeviceCodeSignInProps = {
   providerName: string;
+  /** Optional dialog step heading id; makes the heading a programmatic focus target. */
+  headingId?: string;
   status: DeviceCodeStatus;
   device: DeviceCode | null;
   error?: string;
@@ -137,7 +139,7 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
   return <div className={`byos byos-signin${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading">
       <span className="byos-signin-provider">{props.providerName} <span>{s.planName}</span></span>
-      <h3>{title}</h3>
+      <h3 id={props.headingId} tabIndex={props.headingId ? -1 : undefined}>{title}</h3>
       <p>{body}</p>
     </header>
 

@@ -62,7 +62,7 @@ Model discovery and inference go directly from the browser to the selected provi
 
 ## Brand and localize React controls
 
-Import `@byos/react/styles.css` once, then scope CSS tokens to your application container. `DeviceCodeSignIn`, `AiPill`, and `AiQuickSettingsPanel` accept `className`; `ModelEffortPicker` exposes `classNames.root` and the field, note, and retry classes. Detailed parts and accessible labels have explicit customization props. [React API](../packages/react/README.md) lists every token and localization seam.
+Import `@byos/react/styles.css` once, then scope CSS tokens to your application container. `DeviceCodeSignIn`, `AiPill`, `AiQuickSettingsPanel`, and `AiAccountSettings` accept `className`; `ModelEffortPicker` exposes `classNames.root` and the field, note, and retry classes. Detailed parts and accessible labels have explicit customization props. [React API](../packages/react/README.md) lists every token and localization seam.
 
 ```css
 .my-app {
