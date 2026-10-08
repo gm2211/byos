@@ -6,6 +6,7 @@
  * Extracted from Motive's web/src/codex-tls-transport.ts with behavior unchanged; the site supplies
  * the engine loader, its session, the relay path and header, and its client label.
  */
+import { CODEX_CLIENT_VERSION } from '@byos/core';
 import { CodexHttpStream } from './http-stream.js';
 
 const MAX_BODY = 16 * 1024 * 1024;
@@ -142,11 +143,11 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     headers.set('Host', url.hostname);
     headers.set('Connection', 'close');
     headers.set('Accept-Encoding', 'identity');
-    headers.set('User-Agent', `codex_cli_rs/0.153.2 (${options.clientLabel})`);
+    headers.set('User-Agent', `codex_cli_rs/${CODEX_CLIENT_VERSION} (${options.clientLabel})`);
     // Keep the upstream Codex protocol identity/version consistent with the account catalog.
     // User-Agent still identifies this browser implementation (clientLabel).
     headers.set('Originator', 'codex_cli_rs');
-    headers.set('Version', '0.153.2');
+    headers.set('Version', CODEX_CLIENT_VERSION);
     if (method === 'POST') headers.set('Content-Length', String(body.length));
     const head = encoder.encode(`${method} ${url.pathname}${url.search} HTTP/1.1\r\n${Array.from(headers, ([k, v]) => `${k}: ${v}\r\n`).join('')}\r\n`);
     if (head.length > 32 * 1024) throw new CodexTransportError('This Codex request is too large.');

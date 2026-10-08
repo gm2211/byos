@@ -178,3 +178,9 @@ relay.handleUpgrade(httpServer);
 5. Commit generated files and revision record together. Release each application under its own procedure.
 
 `consumers.json` is the integration inventory. Add new consumers there with selected packages, output mode, engine choice, and revision path. Successful local builds prove integration; each application still needs its own authenticated/runtime acceptance before claiming a newly enabled provider works.
+
+Codex account discovery and browser TLS headers use `CODEX_CLIENT_VERSION` and
+`CODEX_ACCOUNT_CATALOG_URL` from `@byos/core`. Consumers must use that shared URL;
+model IDs still come from OpenAI's catalog, without a fixed model allowlist. The
+compatibility version is reviewed with stable Codex releases, rather than fetched
+from untrusted runtime input. Catalog inclusion is not proof of inference access.

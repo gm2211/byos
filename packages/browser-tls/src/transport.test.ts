@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { CODEX_ACCOUNT_CATALOG_URL, CODEX_CLIENT_VERSION } from '@byos/core';
 import { createCodexTlsFetch, type BrowserTlsEngine } from '../dist/transport.js';
 
 const endpoint = 'https://chatgpt.com/backend-api/codex/responses';
@@ -189,4 +190,23 @@ test('relay 503 uses generic configurable copy and never includes its response b
   const customized = createCodexTlsFetch({ ...customizedState.options, messages: { relayUnavailable: 'Try again after reconnecting.' } });
   await assert.rejects(customized(endpoint, { method: 'POST', body: '{}' }), /Try again after reconnecting/);
   assert.equal(customizedState.requestCount(), 1);
+});
+
+test('account catalog query and TLS compatibility headers share the reviewed version', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  const pending = transport(CODEX_ACCOUNT_CATALOG_URL, { headers: { Authorization: `Bearer ${marker}` } });
+  const socket = await opened();
+  socket.onmessage?.({ data: new Uint8Array([42]).buffer });
+  await waitForWrites();
+  const clear = plaintextWrites.map(bytes => new TextDecoder().decode(bytes)).join('');
+  assert.ok(clear.startsWith(`GET /backend-api/codex/models?client_version=${CODEX_CLIENT_VERSION} HTTP/1.1\r\n`));
+  assert.match(clear, new RegExp(`user-agent: codex_cli_rs/${CODEX_CLIENT_VERSION.replaceAll('.', '\\.')}`, 'i'));
+  assert.ok(clear.toLowerCase().includes(`version: ${CODEX_CLIENT_VERSION}\r\n`));
+  assert.ok(!JSON.stringify(state.records).includes(marker));
+  assert.ok(!wireWrites.some(value => typeof value === 'string' && value.includes(marker)));
+  const body = JSON.stringify({ models: [{ slug: 'gpt-6.1-sol', supported_in_api: true }] });
+  socket.onmessage?.({ data: new TextEncoder().encode(`HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nContent-Type: application/json\r\n\r\n${body}`).buffer });
+  const response = await pending;
+  assert.deepEqual(await response.json(), JSON.parse(body));
 });
