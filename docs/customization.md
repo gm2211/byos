@@ -68,6 +68,37 @@ for await (const event of provider.stream(credential, {
 
 Model discovery and inference go directly from the browser to the selected provider. Pass cancellation through both; abandoning an iterator cancels its response reader. Keep tool orchestration and product-specific prompts in the browser application. Sign-in is a separate flow: `grok()` enables its site-assisted device-code handshake by default (`handshakeViaSite: true`), while its model requests remain browser-direct. Do not add a backend inference relay.
 
+## On-device models
+
+Keep execution location separate from subscription sign-in. Embedded models, MLX and Apple Intelligence need no account or token. Use the native catalog only for a user-owned application runtime with installed engine bindings:
+
+```ts
+import { createOnDeviceProvider, onDeviceProvidersFor } from '@byos/providers';
+
+// Inject this from the trusted native host, not from its user-agent string.
+const runtime = { kind: 'native' as const, supportedProviders: ['mlx'] as const };
+const options = onDeviceProvidersFor(runtime);
+const provider = createOnDeviceProvider('mlx', {
+  runtime,
+  bridge: {
+    availability: () => nativeModelService.readiness,
+    listModels: signal => nativeModelService.listModels(signal),
+    stream: request => nativeModelService.stream(request),
+  },
+});
+const status = provider.availability();
+if (status.available) {
+  const models = await provider.listModels(signal);
+  for await (const event of provider.stream({ model: models[0].id, messages, signal })) {
+    if (event.type === 'text') appendText(event.text);
+  }
+}
+```
+
+The `nativeModelService` is supplied by the application, not BYOS. It must execute locally and honor cancellation. Use your llama.cpp binding for `local`, MLX binding for `mlx`, and Foundation Models binding for `foundation-models`. Readiness must reflect actual hardware/OS support, model installation, and feature enablement; a user-agent or provider ID is not evidence of availability. Apple Intelligence bindings should refresh status from `SystemLanguageModel.default.availability`. Keep platform model catalogs and download UX in the host.
+
+For browser or hosted-server apps, pass `{ kind: 'browser', supportedProviders: [] }` or `{ kind: 'server', supportedProviders: [] }`. Both return no on-device options and reject discovery/inference even when a bridge is supplied. A future browser engine needs a separate explicit capability contract; this native adapter does not enable it. Existing browser subscription/API adapters keep their credential and transport boundaries. Do not route native prompts to a hosted service or silently switch provider/billing when unavailable.
+
 ## Brand and localize React controls
 
 Import `@byos/react/styles.css` once, then scope CSS tokens to your application container. `DeviceCodeSignIn`, `SignInWithChatGPT`, `AiPill`, `AiQuickSettingsPanel`, and `AiAccountSettings` accept `className`; `ModelEffortPicker` exposes `classNames.root` and the field, note, and retry classes. Detailed parts and accessible labels have explicit customization props. [React API](../packages/react/README.md) lists every token and localization seam.

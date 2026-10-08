@@ -1,6 +1,6 @@
 # BYOS — bring your own subscription
 
-Reusable local and browser-owned AI connections for applications that let people use their own subscriptions or API keys. The kit owns provider behavior; each application owns its branding, storage namespace, session binding, provider choices, and policy gates.
+Reusable on-device, local and browser-owned AI connections for applications that let people use their own models, subscriptions or API keys. The kit owns provider behavior; each application owns its branding, storage namespace, session binding, provider choices, and policy gates.
 
 ## Start here
 
@@ -17,7 +17,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | --- | --- |
 | `@byos/chatgpt-local` | Official ChatGPT plan sign-in for local Node apps; Keychain and direct HTTPS, no tunnel |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
-| `@byos/providers` | Browser provider adapters, sign-in, model discovery, streaming chat |
+| `@byos/providers` | Browser provider adapters plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
@@ -27,6 +27,12 @@ The shared React UI includes identity-only Sign in with ChatGPT, subscription si
 
 Run `npm run example` for the synthetic, provider-free React customization playground.
 Each package README documents its API. [Customization recipes](docs/customization.md) cover branding, localization, persistence, provider selection, cookie/header sessions, and updates.
+
+## On-device models
+
+`@byos/providers` includes Local (Embedded), On-device (MLX), and Apple Intelligence. These are credential-free execution options, not subscription services. `onDeviceProvidersFor` exposes only providers explicitly supported by a native application binding; browser and hosted-server runtimes receive an empty list. Existing browser provider defaults do not change.
+
+`createOnDeviceProvider` adapts a host's local model discovery, readiness and streaming implementation. BYOS does not bundle llama.cpp, MLX, or Apple's Foundation Models framework. Native apps supply their engine/IPC bridge and perform hardware, OS, model-download and readiness checks. Merely running a web app on a Mac does not grant a native bridge. No hosted inference endpoint or cloud fallback is used. See [native binding recipe](docs/customization.md#on-device-models).
 
 ## Use ChatGPT without the browser TLS tunnel
 

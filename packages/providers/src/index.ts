@@ -9,3 +9,4 @@ export * from './openrouter-sign-in.js';
 export type { HuggingFaceSignInOptions, HuggingFaceSignInMessages, HuggingFaceTokenRecord, HuggingFaceOAuthResult, HuggingFaceSignIn } from './huggingface-sign-in.js';
 export { createHuggingFaceSignIn } from './huggingface-sign-in.js';
 export * from './order.js';
+export * from './on-device.js';
