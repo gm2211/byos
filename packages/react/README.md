@@ -4,11 +4,14 @@ React UI for the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
 - `DeviceCodeSignIn`: one-time-code subscription sign-in (idle, preparing, code, completing, error,
-  connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure.
+  connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure. Opt into
+  compact Sign in, Privacy, and Help tabs for short setup dialogs.
 - `ModelEffortPicker`: model and effort from the provider's own list, using the shared searchable
   combobox by default; `renderSelect` preserves an application-owned control when needed.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
 - `AiQuickSettingsPanel`: reusable provider heading, settings action, connection notice, and settings body for `AiPill` or standalone use.
+- `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
+- `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
 - `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.
 - `useProviderModels`, `useEffortChoice`: headless hooks over `@byos/core`.
 
@@ -56,7 +59,7 @@ Use `className` on `DeviceCodeSignIn` and `AiPill`; `ModelEffortPicker` also sup
 `field`, `note`, and `retry` class names. `AiPill` supports button, prefix, label, popover, and
 backdrop class names. These can scope app-specific CSS while preserving the package defaults.
 
-`DeviceCodeSignIn`, `ModelEffortPicker`, and `AiQuickSettingsPanel` localize UI copy through their `strings` props.
+`DeviceCodeSignIn`, `ModelEffortPicker`, `AiQuickSettingsPanel`, `AiAccountSettings`, and `AiProviderPicker` localize UI copy through their `strings` props. `DeviceCodeSignIn` accepts an optional `headingId` for dialog focus management and `compact` for a tabbed presentation. In compact mode, Remember and full privacy details appear on Privacy; code, approval, progress, and cancel stay on Sign in; Help carries sign-in guidance. The short disclosure appears before initial sign-in and is omitted while waiting. ArrowLeft/ArrowRight, Home, and End move between tabs. The default presentation remains unchanged.
 `AiPill` uses the explicit label props listed below. For example:
 
 ```tsx
@@ -87,6 +90,32 @@ the package's default CSS; the generated `src/styles.css` is the file consumers 
 It owns the provider header, settings action, state copy, and content spacing; pass an optional
 `reconnectAction` for expired connections. `defaultAiQuickSettingsStrings` provides the English
 defaults. It does not perform authentication or select providers.
+
+`AiAccountSettings` keeps the selected provider visible and exposes a 44px **Change AI service**
+action. Model is the initial tab. Account and Tools appear only when their content is supplied;
+ArrowLeft/ArrowRight, Home, and End move between tabs. Only the active tab panel is mounted.
+When `expired` is true, Model shows a short link to Account and `recoveryAction` appears inside
+Account. Provider changes, account controls, and tool actions remain application callbacks/content.
+`AiProviderPicker` renders a short list of provider actions with optional badges and selected state;
+`onSelect` reports an id and never starts authentication.
+
+```tsx
+<AiAccountSettings
+  providerName="Example AI"
+  expired={connectionExpired}
+  onChangeProvider={openProviderPicker}
+  modelSettings={<ModelEffortPicker {...pickerProps} />}
+  accountSettings={<AccountControls />}
+  toolsSettings={<ToolControls />}
+  recoveryAction={<button onClick={reconnect}>Reconnect</button>}
+/>
+
+<AiProviderPicker
+  providers={[{ id: 'example', name: 'Example AI', badge: 'Plan' }]}
+  selectedId={providerId}
+  onSelect={setProviderId}
+/>
+```
 
 React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
 your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).

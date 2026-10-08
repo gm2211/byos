@@ -5,4 +5,6 @@ export * from './ModelEffortPicker.js';
 export * from './AiPill.js';
 export * from './AiQuickSettingsPanel.js';
 export * from './SearchableSelect.js';
+export * from './AiAccountSettings.js';
+export * from './AiProviderPicker.js';
 export * from './hooks.js';

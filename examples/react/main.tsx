@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   AiPill,
+  AiAccountSettings,
+  AiProviderPicker,
   AiQuickSettingsPanel,
   defaultDeviceCodeStrings,
   DeviceCodeSignIn,
@@ -63,6 +65,9 @@ function spanishSignInStrings(providerName: string): Partial<DeviceCodeSignInStr
     troubleBody: 'La vista previa no envía solicitudes.',
     remember: 'Recordar en este navegador',
     privacySummary: 'Privacidad de esta vista previa',
+    signInTab: 'Acceso',
+    privacyTab: 'Privacidad',
+    helpTab: 'Ayuda',
   };
 }
 
@@ -73,7 +78,8 @@ function App() {
   const [remember, setRemember] = useState(false);
   const [model, setModel] = useState('sample-small');
   const [effort, setEffort] = useState('low');
-  const providerName = 'Sample AI';
+  const [selectedProviderId, setSelectedProviderId] = useState('sample');
+  const providerName = selectedProviderId === 'sample' ? 'Sample AI' : 'Example AI';
   const connected = demoState === 'success';
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   const status = demoState === 'error' ? 'error' : demoState === 'exchanging' ? 'exchanging' : demoState === 'idle' || connected ? 'idle' : 'pending';
@@ -146,6 +152,7 @@ function App() {
             </div>
             <DeviceCodeSignIn
               providerName={providerName}
+              compact
               status={status}
               device={device}
               error={demoState === 'error' ? (locale === 'es' ? 'Error de prueba. Inténtalo de nuevo.' : 'Preview error. Try again.') : undefined}
@@ -203,6 +210,19 @@ function App() {
               <AiQuickSettingsPanel providerName={providerName} connection={connected ? 'connected' : 'disconnected'} onOpenSettings={() => setDemoState('success')} strings={locale === 'es' ? { allSettings: 'Todos los ajustes', disconnected: provider => `${provider} no está conectado. Conéctalo en Ajustes de IA para elegir un modelo.` } : undefined}>
                 <ModelEffortPicker providerName={providerName} models={demoModels} model={model} onModelChange={setModel} efforts={[{ value: 'low', label: 'Low' }, { value: 'max', label: 'Max' }]} effort={effort} onEffortChange={setEffort} portalContainer={overlayRoot} />
               </AiQuickSettingsPanel>
+            </div>
+            <div className="account-settings-demo">
+              <AiAccountSettings
+                providerName={providerName}
+                expired={demoState === 'error'}
+                onChangeProvider={() => setDemoState('idle')}
+                modelSettings={<ModelEffortPicker providerName={providerName} models={demoModels} model={model} onModelChange={setModel} efforts={[{ value: 'low', label: 'Low' }, { value: 'max', label: 'Max' }]} effort={effort} onEffortChange={setEffort} portalContainer={overlayRoot} />}
+                accountSettings={<label className="demo-account-setting"><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />{locale === 'es' ? 'Recordar en este navegador' : 'Remember on this browser'}</label>}
+                toolsSettings={<p>{locale === 'es' ? 'Controles de herramientas de ejemplo.' : 'Sample tool access controls.'}</p>}
+                recoveryAction={demoState === 'error' ? <button type="button" className="byos-secondary-button" onClick={() => setDemoState('success')}>{locale === 'es' ? 'Reconectar' : 'Reconnect'}</button> : undefined}
+                strings={locale === 'es' ? { heading: 'Ajustes de IA', changeProvider: 'Cambiar servicio de IA', modelTab: 'Modelo', accountTab: 'Cuenta', toolsTab: 'Herramientas', expiredStatus: 'Acceso vencido', expiredModelNote: 'Vuelve a conectar desde Cuenta.', openAccountTab: 'Cuenta' } : undefined}
+              />
+              <AiProviderPicker providers={[{ id: 'sample', name: 'Sample AI' }, { id: 'example', name: 'Example AI', badge: 'Preview' }]} selectedId={selectedProviderId} onSelect={setSelectedProviderId} strings={locale === 'es' ? { label: 'Elige un servicio de IA', selected: 'Elegido' } : undefined} />
             </div>
           </aside>
         </section>

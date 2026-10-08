@@ -28,10 +28,10 @@ export const defaultModelEffortStrings: ModelEffortPickerStrings = {
   modelAriaLabel: 'Model',
   effortAriaLabel: 'Effort',
   effortFrom: name => `from ${name}`,
-  noEffort: name => `${name} sets the effort itself for this model; it doesn’t offer a choice.`,
+  noEffort: name => `${name} chooses effort for this model.`,
   providerDefault: 'Provider default',
-  remembered: name => `Couldn't reach ${name} for its model list just now. This is what it last returned.`,
-  fallback: name => `Couldn't reach ${name} for its model list yet. This is a fallback list and may be out of date.`,
+  remembered: name => `Using ${name}'s last model list.`,
+  fallback: name => `Using a fallback list for ${name}; it may be out of date.`,
   retry: 'Retry',
 };
 
