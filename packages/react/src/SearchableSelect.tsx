@@ -92,7 +92,6 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, compact 
   function choose(option: SearchOption) {
     onChange(option.value);
     close();
-    inputRef.current?.blur();
   }
 
   return <div
@@ -117,7 +116,10 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, compact 
         onFocus={event => {
           setOpen(true); setEditing(false); setQuery(''); event.currentTarget.select();
         }}
-        onClick={event => { if (!editing) event.currentTarget.select(); }}
+        onClick={event => {
+          if (!editing) event.currentTarget.select();
+          if (!open) setOpen(true);
+        }}
         onChange={event => { setEditing(true); setQuery(event.target.value); setOpen(true); }}
         onKeyDown={event => {
           const startsFreshQuery = !editing && !event.metaKey && !event.ctrlKey && !event.altKey
@@ -133,7 +135,11 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, compact 
           } else if (event.key === 'Enter' && open && visibleOptions[activeIndex]) {
             event.preventDefault(); choose(visibleOptions[activeIndex]);
           } else if (event.key === 'Escape') {
-            event.preventDefault(); event.stopPropagation(); close(); inputRef.current?.blur();
+            if (open) {
+              event.preventDefault();
+              event.stopPropagation();
+              close();
+            }
           }
         }}
       />
@@ -145,7 +151,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, compact 
         aria-controls={listId}
         onMouseDown={event => event.preventDefault()}
         onClick={() => {
-          if (open) { close(); inputRef.current?.blur(); }
+          if (open) close();
           else { setOpen(true); setEditing(false); setQuery(''); inputRef.current?.focus(); }
         }}
       ><span aria-hidden="true" /></button>
