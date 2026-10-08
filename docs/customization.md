@@ -2,6 +2,14 @@
 
 Keep one small binding layer in each application. Change provider behavior in this kit, then sync the reviewed commit into consumers. Do not edit generated bundles or vendored package source.
 
+## Website Sign in with ChatGPT identity
+
+For an approved website client, use `@byos/server` `createChatGptWebsiteIdentity` and `@byos/react` `SignInWithChatGPT`. This is OpenID identity only: it does not grant ChatGPT plan usage or model access. OpenAI currently limits the website integration to selected commercial partners, so omit the client ID and callback until OpenAI provisions both; the server helper then reports `enabled: false`. Keep this distinct from `@byos/chatgpt-local`, which is Node-only for a user-owned local runtime, and from the browser-owned Codex subscription transport.
+
+Bind the short-lived `{ state, nonce, codeVerifier, expiresAt }` transaction to a random server-generated browser session cookie and implement the transaction store with atomic one-time consumption across instances. The callback uses the exact OpenAI-registered redirect URI. Map verified `{ issuer, clientId, subject }` to a local account under explicit account-linking rules; email equality alone does not prove account ownership. Issue only the host's first-party session. Never store or return OAuth tokens or use this identity token for inference.
+
+The shared React component accepts the host start URL, localized strings, status copy, and a disclosure; it does not own the OAuth flow. Keep copy clear that ChatGPT identity signs into your application while AI plan usage remains a separate capability. See the [server flow and storage contract](../packages/server/README.md#sign-in-with-chatgpt-website-identity) and [React presentation API](../packages/react/README.md#sign-in-with-chatgpt-identity).
+
 ## Local ChatGPT plan connections
 
 `@byos/chatgpt-local` provides a separate Node-only client for official ChatGPT plan usage. Consumer bindings supply the app name, unique Keychain namespace, and browser opener. Keep the client in the local application process and adapt safe status/model/result methods to your UI; never pass its token records through the existing browser `ByosProvider` contract.
@@ -62,7 +70,7 @@ Model discovery and inference go directly from the browser to the selected provi
 
 ## Brand and localize React controls
 
-Import `@byos/react/styles.css` once, then scope CSS tokens to your application container. `DeviceCodeSignIn`, `AiPill`, `AiQuickSettingsPanel`, and `AiAccountSettings` accept `className`; `ModelEffortPicker` exposes `classNames.root` and the field, note, and retry classes. Detailed parts and accessible labels have explicit customization props. [React API](../packages/react/README.md) lists every token and localization seam.
+Import `@byos/react/styles.css` once, then scope CSS tokens to your application container. `DeviceCodeSignIn`, `SignInWithChatGPT`, `AiPill`, `AiQuickSettingsPanel`, and `AiAccountSettings` accept `className`; `ModelEffortPicker` exposes `classNames.root` and the field, note, and retry classes. Detailed parts and accessible labels have explicit customization props. [React API](../packages/react/README.md) lists every token and localization seam.
 
 ```css
 .my-app {

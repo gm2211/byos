@@ -8,6 +8,7 @@ import {
   defaultDeviceCodeStrings,
   DeviceCodeSignIn,
   ModelEffortPicker,
+  SignInWithChatGPT,
   type DeviceCodeSignInStrings,
   type ModelEffortPickerStrings,
 } from '@byos/react';
@@ -145,6 +146,21 @@ function App() {
         </section>
 
         <section className="showcase" aria-label={locale === 'es' ? 'Componentes BYOS' : 'BYOS components'}>
+          <article className="card identity-card">
+            <div className="card-top">
+              <p className="card-kicker">{locale === 'es' ? 'Identidad de la aplicación' : 'Application identity'}</p>
+              <span className="sample-badge">{locale === 'es' ? 'Sin configurar' : 'Not configured'}</span>
+            </div>
+            <SignInWithChatGPT
+              href="/auth/chatgpt/start"
+              variant="black"
+              status="unavailable"
+              message={locale === 'es' ? 'El acceso con ChatGPT no está habilitado en esta vista previa.' : 'ChatGPT sign-in is not enabled in this preview.'}
+              strings={locale === 'es' ? { heading: 'Acceso con ChatGPT', description: 'Usa tu cuenta de ChatGPT para acceder a esta aplicación.', button: 'Continuar con ChatGPT', unavailable: 'Acceso no disponible', error: 'No se pudo completar el acceso.' } : undefined}
+              disclosure={<p>{locale === 'es' ? 'La identidad de ChatGPT solo inicia sesión en la aplicación; no conecta una suscripción de IA.' : 'ChatGPT identity signs in to the app only; it does not connect an AI plan.'}</p>}
+            />
+          </article>
+
           <article className="card signin-card">
             <div className="card-top">
               <p className="card-kicker">{previewTitle}</p>

@@ -21,9 +21,9 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
-| `@byos/server` | Bounded ciphertext relay and disclosed provider device-code broker |
+| `@byos/server` | Bounded ciphertext relay, provider device-code broker, and identity-only website OIDC helper |
 
-The shared React UI includes subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
+The shared React UI includes identity-only Sign in with ChatGPT, subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
 
 Run `npm run example` for the synthetic, provider-free React customization playground.
 Each package README documents its API. [Customization recipes](docs/customization.md) cover branding, localization, persistence, provider selection, cookie/header sessions, and updates.
@@ -41,6 +41,11 @@ Open the printed loopback URL, choose **Continue with ChatGPT**, authorize plan 
 Eligible Plus/Pro users share their existing plan allowance. A successful connection is not proof of inference: wait for a completed response. Local personal/open-source usage follows OpenAI's current eligibility rules; paid or remotely hosted applications need the applicable OpenAI approval. The independently authored adapter does not include the noncommercial Sign in with ChatGPT DevKit.
 
 Use the [local package API](packages/chatgpt-local/README.md) for a consumer binding. Keep tokens inside the local runtime; expose only account metadata, model choices, optional generation activity metadata, and requested results to the UI. Existing `@byos/codex` browser integrations retain their previous transport and can migrate separately.
+
+
+## Website Sign in with ChatGPT
+
+`@byos/server` and `@byos/react` include a website OIDC identity flow and presentation. OpenAI currently offers website Sign in with ChatGPT to selected commercial partners; the helper stays disabled until the application supplies its provisioned `oaiapp_` client ID and exact callback URL. This signs the person into the application only. It does not connect a ChatGPT plan or grant model access. See the [server contract](packages/server/README.md#sign-in-with-chatgpt-website-identity).
 
 ## Consume a pinned revision
 
@@ -63,6 +68,8 @@ Use a full commit SHA for reproducible updates. The utility exports committed so
 [consumers.json](consumers.json) records the bindings: Jev Polls uses the local ChatGPT package for draft generation; Motive uses TypeScript/React packages and its own reviewed engine build; Tracked uses an ES module and the kit's reviewed engine. Landgrab uses the core/provider packages with its own browser storage bindings; Trim Lab embeds the core/provider browser bundle in its self-contained pages. Each consumer's sync script exports an immutable kit revision. Application changes stay in their wrappers, never in vendored source.
 
 ## Credential boundary
+
+Website identity uses the approved identity-only OpenID Connect flow. The server verifies and discards the ID token, then exposes only verified identity claims to the application; OAuth access and refresh tokens are neither requested for use nor retained. The application creates its own first-party session. This identity flow is separate from ChatGPT plan usage.
 
 For `@byos/chatgpt-local`, credentials live in the user-owned local process and OS credential store. Its HTTPS requests go straight to official OpenAI endpoints. UI routes must be loopback-only, verify Host/Origin, protect mutations against CSRF, and never return tokens. This path is not a credential proxy for a hosted multi-user application.
 

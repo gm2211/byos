@@ -63,3 +63,32 @@ segments are rejected during construction.
 
 Limits (per-account and global byte windows, connection caps, frame sizes, lifetimes, public-IP
 pinning) are fixed in the package on purpose.
+
+
+## Sign in with ChatGPT website identity
+
+`createChatGptWebsiteIdentity(options)` implements the identity-only website OIDC flow for an OpenAI-provisioned public client. OpenAI currently limits website Sign in with ChatGPT to selected commercial partners. The helper remains disabled when no `clientId` and exact registered HTTPS `redirectUri` are supplied; there is no sample client ID or automatic fallback. It does not implement ChatGPT plan usage, model access, or credential storage.
+
+```ts
+import { createChatGptWebsiteIdentity, type ChatGptWebsiteTransactionStore } from '@byos/server';
+
+declare const transactions: ChatGptWebsiteTransactionStore; // durable and atomically consumes one transaction per browser binding
+const identitySignIn = createChatGptWebsiteIdentity({
+  clientId: process.env.OPENAI_WEBSITE_CLIENT_ID, // provisioned by OpenAI
+  redirectUri: 'https://app.example/auth/chatgpt/callback', // exact registered URL
+  transactions,
+});
+
+if (identitySignIn.enabled) {
+  const { authorizationUrl } = await identitySignIn.begin(browserSessionBinding);
+  // Redirect the browser to authorizationUrl. Keep the binding in a Secure, HttpOnly, SameSite=Lax cookie.
+}
+// In the callback, pass the cookie-bound browserSessionBinding and original callback URL.
+const externalIdentity = await identitySignIn.complete(browserSessionBinding, callbackUrl);
+// Map `{issuer, clientId, subject}` to the host account, then issue only your own first-party session.
+// Do not store or return OAuth tokens; do not auto-link by email alone.
+```
+
+The transaction store persists `{ state, nonce, codeVerifier, expiresAt }` server-side, expires it, and atomically deletes it on callback. Runtime failures use `ChatGptWebsiteIdentityError` with the fixed codes `not_configured`, `invalid_request`, or `sign_in_failed`; provider/network details are never included. Bind it to a server-generated browser session, not an email or caller-supplied account ID. The helper requests only `openid profile email`, validates the OpenAI discovery document against fixed production endpoints, uses public-client token auth (`none`), bounds responses, and verifies signature, issuer, audience, expiration, `iat`, subject and nonce with `jose`. It returns only verified identity claims. It never returns, saves, or logs an access token, refresh token, or raw ID token.
+
+Keep this identity session separate from ChatGPT plan connection. The website identity flow does not authorize inference or subscription usage.
