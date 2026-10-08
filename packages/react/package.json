@@ -16,7 +16,7 @@
     "node": ">=22.23.2"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp src/styles.css dist/styles.css",
+    "build": "tsc -p tsconfig.json && cp src/styles.css dist/styles.css && cp src/chatgpt-logo-black.svg src/chatgpt-logo-white.svg dist/",
     "test": "npm run build && node --experimental-strip-types --test src/*.test.ts",
     "css": "python3 src/build-css.py src/styles.src.css src/styles.css"
   },

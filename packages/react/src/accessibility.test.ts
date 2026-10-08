@@ -8,6 +8,7 @@ import { AiQuickSettingsPanel } from '../dist/AiQuickSettingsPanel.js';
 import { AiAccountSettings } from '../dist/AiAccountSettings.js';
 import { AiProviderPicker } from '../dist/AiProviderPicker.js';
 import { DeviceCodeSignIn } from '../dist/DeviceCodeSignIn.js';
+import { SignInWithChatGPT } from '../dist/SignInWithChatGPT.js';
 
 test('AiAccountSettings starts on Model, exposes provider switching, and mounts one settings pane', () => {
   const html = renderToStaticMarkup(createElement(AiAccountSettings, {
@@ -189,4 +190,30 @@ test('translating visible picker labels also translates accessible names by defa
   }));
   assert.match(html, /aria-label="Modelo"/);
   assert.match(html, /aria-label="Razonamiento"/);
+});
+
+
+test('SignInWithChatGPT presents the approved route, identity-only disclosure, and disabled state accessibly', () => {
+  const html = renderToStaticMarkup(createElement(SignInWithChatGPT, {
+    href: '/auth/chatgpt/start', variant: 'white', status: 'idle',
+    disclosure: 'ChatGPT identity signs in to this app only.',
+  }));
+  assert.match(html, /Continue with ChatGPT/);
+  assert.match(html, /href="\/auth\/chatgpt\/start"/);
+  assert.match(html, /chatgpt-logo-black\.svg/);
+  assert.match(html, /ChatGPT identity signs in to this app only/);
+  assert.match(html, /aria-labelledby="byos-chatgpt-identity-/);
+
+  const unavailable = renderToStaticMarkup(createElement(SignInWithChatGPT, {
+    href: '/auth/chatgpt/start', status: 'unavailable', message: 'ChatGPT sign-in is not enabled.',
+  }));
+  assert.match(unavailable, /<button[^>]*disabled/);
+  assert.match(unavailable, /role="status"/);
+  assert.doesNotMatch(unavailable, /href="\/auth\/chatgpt\/start"/);
+
+  for (const status of ['pending', 'success'] as const) {
+    const inactive = renderToStaticMarkup(createElement(SignInWithChatGPT, { href: '/auth/chatgpt/start', status }));
+    assert.match(inactive, /<button[^>]*disabled/);
+    assert.doesNotMatch(inactive, /href="\/auth\/chatgpt\/start"/);
+  }
 });

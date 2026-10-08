@@ -12,6 +12,7 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `AiQuickSettingsPanel`: reusable provider heading, settings action, connection notice, and settings body for `AiPill` or standalone use.
 - `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
 - `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
+- `SignInWithChatGPT`: localized identity-only website sign-in presentation with approved black/white OpenAI button formats and availability/status slots. The host supplies the start route and its disclosure.
 - `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.
 - `useProviderModels`, `useEffortChoice`: headless hooks over `@byos/core`.
 
@@ -119,3 +120,15 @@ Account. Provider changes, account controls, and tool actions remain application
 
 React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
 your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
+
+
+`SignInWithChatGPT` renders a 44px native link to the host's website OIDC start route, or a disabled button when `status="unavailable"`. `variant="black" | "white"` selects an approved monochrome sign-in button and bundled official OpenAI vector mark. `onStart` runs synchronously for a normal primary click before the browser follows `href`; pending, success, and unavailable states disable the action. The source files are the official white and black marks from [OpenAI’s website sign-in button assets](https://developers.openai.com/assets/siwc/sign-in-buttons/). Localize `heading`, `description`, button, and state labels through `strings`; provide a product-specific `disclosure` that separates ChatGPT identity from plan usage. The component does not start OAuth itself and does not imply that identity grants ChatGPT subscription usage.
+
+```tsx
+<SignInWithChatGPT
+  href="/auth/chatgpt/start"
+  status={identitySignInEnabled ? 'idle' : 'unavailable'}
+  message={identitySignInEnabled ? undefined : 'ChatGPT sign-in is not enabled for this app.'}
+  disclosure={<p>ChatGPT identity signs in to this app. It does not connect an AI plan.</p>}
+/>
+```

@@ -8,3 +8,4 @@ export * from './SearchableSelect.js';
 export * from './AiAccountSettings.js';
 export * from './AiProviderPicker.js';
 export * from './hooks.js';
+export * from './SignInWithChatGPT.js';
