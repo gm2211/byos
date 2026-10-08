@@ -1,10 +1,11 @@
-/* GENERATED from styles.src.css by `npm run css` (src/build-css.py adds each token default). Edit the source. */
 /*
  * @byos/react default styles. Theme by setting these on :root (or any ancestor):
  *   --byos-font, --byos-font-mono, --byos-text, --byos-muted, --byos-faint,
  *   --byos-surface, --byos-surface-soft, --byos-surface-raised, --byos-surface-input,
  *   --byos-line, --byos-line-strong, --byos-accent, --byos-accent-strong, --byos-on-accent,
- *   --byos-success, --byos-warning, --byos-warning-soft, --byos-danger, --byos-radius,
+ *   --byos-success, --byos-warning, --byos-warning-soft, --byos-danger, --byos-secondary-fill,
+ *   --byos-secondary-border, --byos-secondary-hover, --byos-surface-overlay, --byos-surface-backdrop, --byos-radius,
+ *   --byos-pill-fill, --byos-pill-border, --byos-pill-text,
  *   --byos-radius-lg, --byos-shadow
  * Every value below falls back to a neutral default, so an unthemed site still looks finished.
  */
@@ -50,25 +51,68 @@
 @media (max-width: 600px) { .byos-signin { gap: 16px; } .byos-signin h3 { font-size: 20px; } .byos-signin-code { padding-block: 16px; } }
 
 .byos-model-effort { display: grid; gap: 12px; font: 400 14px/1.5 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); color: var(--byos-text, #1b1f27); }
+.byos-picker-stale { display: grid; justify-items: start; gap: 8px; }
 .byos-field { display: grid; gap: 6px; }
 .byos-field > span { color: var(--byos-faint, #8a92a1); font: 500 11px/1.5 var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); letter-spacing: .08em; }
 .byos-field small { color: var(--byos-muted, #5a6272); font: 400 11px var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); letter-spacing: 0; }
 .byos-select { min-height: 44px; padding: 0 10px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-input, #f9fafb); color: var(--byos-text, #1b1f27); font: inherit; }
 .byos-note { margin: 0; color: var(--byos-muted, #5a6272); font-size: 12px; line-height: 1.5; }
 .byos-link-button { padding: 0; border: 0; background: none; color: var(--byos-accent, #2f5bd3); font: inherit; text-decoration: underline; cursor: pointer; }
+.byos-secondary-button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--byos-secondary-border, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-secondary-fill, #f6f7f9); color: var(--byos-text, #1b1f27); font: 600 13px/1.4 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-secondary-button:hover { background: var(--byos-secondary-hover, #eef0f4); }
+.byos :is(button, select):focus-visible { outline: 2px solid var(--byos-accent, #2f5bd3); outline-offset: 3px; }
+
+.byos-quick-settings { display: grid; gap: 0; min-width: 0; color: var(--byos-text, #1b1f27); font: 400 14px/1.5 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-quick-settings-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; margin-bottom: 12px; }
+.byos-quick-settings-provider { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.byos-quick-settings-all { position: relative; isolation: isolate; min-height: 44px; flex: none; padding: 6px 8px; border: 0; background: transparent; color: var(--byos-text, #1b1f27); font: 600 13px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-quick-settings-all::before { content: ''; position: absolute; inset: 6px 0; z-index: -1; border: 1px solid var(--byos-secondary-border, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-secondary-fill, #f6f7f9); }
+.byos-quick-settings-all:hover::before { background: var(--byos-secondary-hover, #eef0f4); }
+.byos-quick-settings-warning { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--byos-warning, #b26b00); border-radius: var(--byos-radius, 8px); background: var(--byos-warning-soft, #fbf1de); color: var(--byos-text, #1b1f27); font-size: 12px; }
+.byos-quick-settings-warning p, .byos-quick-settings-note { margin: 0; color: var(--byos-muted, #5a6272); font-size: 12px; line-height: 1.5; }
+.byos-quick-settings-reconnect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.byos-quick-settings-reconnect button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--byos-accent, #2f5bd3); border-radius: var(--byos-radius, 8px); background: var(--byos-accent, #2f5bd3); color: var(--byos-on-accent, #ffffff); font: 600 13px/1.4 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); cursor: pointer; }
+.byos-quick-settings-reconnect button:hover { border-color: var(--byos-accent-strong, #2448ad); background: var(--byos-accent-strong, #2448ad); }
+.byos-quick-settings-reconnect p { margin: 0; color: var(--byos-muted, #5a6272); font-size: 12px; }
+.byos-quick-settings-reconnect a { min-height: 44px; display: inline-flex; align-items: center; color: var(--byos-accent, #2f5bd3); font-size: 12px; }
+.byos-quick-settings-note { margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--byos-line, #e2e5eb); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-soft, #f6f7f9); }
+.byos-quick-settings-content { min-width: 0; }
+
+.byos-searchable-select { position: relative; min-width: 0; }
+.byos-searchable-select-field { height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) 31px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-raised, #eef0f4); transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.byos-searchable-select:focus-within .byos-searchable-select-field, .byos-searchable-select--open .byos-searchable-select-field { border-color: var(--byos-accent, #2f5bd3); background: var(--byos-surface-input, #f9fafb); box-shadow: 0 0 0 3px color-mix(in srgb, var(--byos-accent, #2f5bd3) 25%, transparent); }
+.byos-searchable-select-input { min-width: 0; width: 100%; padding: 0 3px 0 9px; overflow: hidden; border: 0; outline: 0; background: transparent; color: var(--byos-text, #1b1f27); font: 400 12px/1.3 var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); text-overflow: ellipsis; }
+.byos-searchable-select-input::selection { background: color-mix(in srgb, var(--byos-accent, #2f5bd3) 25%, var(--byos-surface, #ffffff)); }
+.byos-searchable-select-toggle { display: grid; place-items: center; width: 27px; padding: 0; border: 0; background: transparent; color: var(--byos-muted, #5a6272); cursor: pointer; }
+.byos-searchable-select-toggle span { width: 0; height: 0; border-right: 4px solid transparent; border-left: 4px solid transparent; border-top: 5px solid currentColor; transition: transform .14s ease; }
+.byos-searchable-select--open .byos-searchable-select-toggle span { transform: rotate(180deg); }
+.byos-searchable-options { overflow-y: auto; padding: 5px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-overlay, var(--byos-surface, #ffffff)); box-shadow: var(--byos-shadow, 0 24px 60px -24px rgb(0 0 0 / .35)); backdrop-filter: blur(16px); scrollbar-width: thin; scrollbar-color: var(--byos-line-strong, #cdd2da) transparent; width: max-content; max-width: min(360px, calc(100vw - 16px)); }
+.byos-searchable-option { width: 100%; min-height: 36px; padding: 5px 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow: hidden; border: 0; border-radius: var(--byos-radius, 8px); background: transparent; color: var(--byos-muted, #5a6272); text-align: left; font: 400 11px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); white-space: nowrap; cursor: pointer; }
+.byos-searchable-option > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-overflow: ellipsis; }
+.byos-searchable-option-meta { padding: 0; overflow: hidden; color: var(--byos-faint, #8a92a1); font: 500 11px/1.3 var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); text-overflow: ellipsis; }
+.byos-searchable-option:hover, .byos-searchable-option--active { background: var(--byos-surface-soft, #f6f7f9); color: var(--byos-text, #1b1f27); }
+.byos-searchable-option--selected, .byos-searchable-option b { color: var(--byos-accent, #2f5bd3); }
+.byos-searchable-option b { flex: 0 0 auto; font: 500 11px/1.3 var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.byos-searchable-options p, .byos-searchable-options > small { display: block; margin: 0; padding: 9px 8px; color: var(--byos-faint, #8a92a1); font: 400 11px/1.4 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-searchable-select--compact { width: 100%; }
+.byos-searchable-select--compact .byos-searchable-select-field { height: 44px; grid-template-columns: minmax(0, 1fr) 44px; }
+.byos-searchable-select--compact .byos-searchable-select-toggle { width: 44px; }
+@media (max-width: 720px) { .byos-searchable-options > .byos-searchable-option { min-height: 44px; } }
 
 .byos-dialog-close { width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid var(--byos-line, #e2e5eb); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-raised, #eef0f4); color: var(--byos-muted, #5a6272); cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
 .byos-dialog-close:hover { border-color: var(--byos-line-strong, #cdd2da); background: var(--byos-surface-soft, #f6f7f9); color: var(--byos-text, #1b1f27); }
 .byos-dialog-close:focus-visible { outline: 2px solid var(--byos-accent, #2f5bd3); outline-offset: 2px; }
 
 .byos-pill-root { position: relative; display: inline-flex; }
-.byos-pill { min-height: 36px; max-width: 260px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-surface, #ffffff); color: var(--byos-muted, #5a6272); font: 500 11px var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+.byos-pill { min-height: 44px; max-width: 260px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-pill-fill, var(--byos-surface, #ffffff)); color: var(--byos-muted, #5a6272); font: 500 11px var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
 .byos-pill > i { width: 6px; height: 6px; border-radius: 50%; background: var(--byos-faint, #8a92a1); }
-.byos-pill.connected { border-color: var(--byos-accent, #2f5bd3); color: var(--byos-accent-strong, #2448ad); }
+.byos-pill.connected { border-color: var(--byos-pill-border, var(--byos-accent, #2f5bd3)); color: var(--byos-pill-text, var(--byos-accent-strong, #2448ad)); }
 .byos-pill.connected > i { background: var(--byos-success, #1f7a4d); }
+.byos-pill-needs-sign-in { border-color: var(--byos-warning, #b26b00) !important; background: var(--byos-warning-soft, #fbf1de) !important; }
+.byos-pill.byos-pill-needs-sign-in > i { background: var(--byos-warning, #b26b00); }
 .byos-pill-prefix { flex: none; }
 .byos-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; font: 400 12px var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); color: var(--byos-text, #1b1f27); }
-.byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius-lg, 14px); background: var(--byos-surface, #ffffff); box-shadow: var(--byos-shadow, 0 24px 60px -24px rgb(0 0 0 / .35)); color: var(--byos-text, #1b1f27); font: 400 14px/1.5 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); text-align: left; }
+.byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius-lg, 14px); background: var(--byos-surface-overlay, var(--byos-surface, #ffffff)); box-shadow: var(--byos-shadow, 0 24px 60px -24px rgb(0 0 0 / .35)); color: var(--byos-text, #1b1f27); font: 400 14px/1.5 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); text-align: left; }
 .byos-pill-popover-sheet { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: var(--byos-radius-lg, 14px) var(--byos-radius-lg, 14px) 0 0; }
-.byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: rgb(0 0 0 / .35); }
+.byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: var(--byos-surface-backdrop, rgb(0 0 0 / .35)); }
 @media (prefers-reduced-motion: reduce) { .byos-signin .byos-signin-primary, .byos-dialog-close { transition: none; } }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   AiPill,
+  AiQuickSettingsPanel,
   defaultDeviceCodeStrings,
   DeviceCodeSignIn,
   ModelEffortPicker,
@@ -191,12 +192,18 @@ function App() {
                     effort={effort}
                     onEffortChange={setEffort}
                     strings={pickerStrings}
+                    portalContainer={overlayRoot}
                   />
                   <div className="demo-popover-footer"><button type="button" className="demo-close" onClick={close}>{locale === 'es' ? 'Listo' : 'Done'}</button></div>
                 </>}
               </AiPill>
             </div>
             <p className="privacy-note">{locale === 'es' ? 'Los selectores usan opciones ficticias. No se realizan llamadas a modelos.' : 'Picker options are fictional. No model calls run in this example.'}</p>
+            <div className="quick-panel-demo">
+              <AiQuickSettingsPanel providerName={providerName} connection={connected ? 'connected' : 'disconnected'} onOpenSettings={() => setDemoState('success')} strings={locale === 'es' ? { allSettings: 'Todos los ajustes', disconnected: provider => `${provider} no está conectado. Conéctalo en Ajustes de IA para elegir un modelo.` } : undefined}>
+                <ModelEffortPicker providerName={providerName} models={demoModels} model={model} onModelChange={setModel} efforts={[{ value: 'low', label: 'Low' }, { value: 'max', label: 'Max' }]} effort={effort} onEffortChange={setEffort} portalContainer={overlayRoot} />
+              </AiQuickSettingsPanel>
+            </div>
           </aside>
         </section>
       </main>

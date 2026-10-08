@@ -4,8 +4,31 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiPill } from '../dist/AiPill.js';
 import { ModelEffortPicker } from '../dist/ModelEffortPicker.js';
+import { AiQuickSettingsPanel } from '../dist/AiQuickSettingsPanel.js';
 
-test('ModelEffortPicker keeps default accessible names on its native selects', () => {
+test('AiQuickSettingsPanel exposes the provider, settings action, expired notice, and recovery slot', () => {
+  const html = renderToStaticMarkup(createElement(AiQuickSettingsPanel, {
+    providerName: 'Acme AI', connection: 'expired', onOpenSettings: () => undefined,
+    reconnectAction: createElement('button', null, 'Reconnect'), children: createElement('p', null, 'Model settings'),
+  }));
+  assert.match(html, /Acme AI/);
+  assert.match(html, /All AI settings/);
+  assert.match(html, /sign-in expired/);
+  assert.match(html, /Reconnect/);
+  assert.match(html, /Model settings/);
+});
+
+test('AiQuickSettingsPanel omits model content when the account is unavailable for model use', () => {
+  for (const connection of ['disconnected', 'tools-only'] as const) {
+    const html = renderToStaticMarkup(createElement(AiQuickSettingsPanel, {
+      providerName: 'Acme AI', connection, onOpenSettings: () => undefined,
+      children: createElement('p', null, 'Model settings'),
+    }));
+    assert.doesNotMatch(html, /Model settings/);
+  }
+});
+
+test('ModelEffortPicker keeps default accessible names on its searchable controls', () => {
   const html = renderToStaticMarkup(createElement(ModelEffortPicker, {
     providerName: 'Acme',
     models: [{ value: 'model-1', label: 'Model One' }],
@@ -16,8 +39,8 @@ test('ModelEffortPicker keeps default accessible names on its native selects', (
     onEffortChange: () => undefined,
   }));
 
-  assert.match(html, /<select class="byos-select" aria-label="Model"/);
-  assert.match(html, /<select class="byos-select" aria-label="Effort"/);
+  assert.match(html, /role="combobox" aria-label="Model"/);
+  assert.match(html, /role="combobox" aria-label="Effort"/);
 });
 
 test('ModelEffortPicker applies localized accessible names to native selects', () => {

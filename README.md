@@ -23,6 +23,8 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
 | `@byos/server` | Bounded ciphertext relay and disclosed provider device-code broker |
 
+The shared React UI includes subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
+
 Run `npm run example` for the synthetic, provider-free React customization playground.
 Each package README documents its API. [Customization recipes](docs/customization.md) cover branding, localization, persistence, provider selection, cookie/header sessions, and updates.
 
