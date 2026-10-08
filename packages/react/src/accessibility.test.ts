@@ -52,6 +52,40 @@ test('DeviceCodeSignIn exposes an optional focusable dialog heading', () => {
     connected: false, onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
   }));
   assert.match(html, /<h3 id="guided-start-heading" tabindex="-1">Connect your Acme account<\/h3>/);
+  assert.doesNotMatch(html, /role="tablist"/);
+});
+
+test('compact DeviceCodeSignIn keeps pending actions visible and moves disclosure and account details to tabs', () => {
+  const html = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+    providerName: 'Acme', compact: true, status: 'pending', device: { deviceAuthId: 'demo', userCode: 'ABCD-EFGH', verificationUriComplete: 'https://example.test/approve' },
+    connected: false, disclosure: 'Short privacy note', remember: { checked: false, onChange: () => undefined },
+    privacyDetails: createElement('p', null, 'Full privacy details'), onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+  }));
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /role="tab" aria-selected="true"/);
+  assert.match(html, /ABCD-EFGH/);
+  assert.match(html, /Continue at Acme/);
+  assert.match(html, /Waiting for approval/);
+  assert.match(html, /Cancel sign-in/);
+  assert.doesNotMatch(html, /Short privacy note|Full privacy details|Remember on this browser/);
+});
+
+test('compact DeviceCodeSignIn shows initial disclosure and compact error recovery', () => {
+  const initialHtml = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+    providerName: 'Acme', compact: true, status: 'idle', device: null,
+    connected: false, disclosure: 'Short privacy note', onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+  }));
+  assert.match(initialHtml, /Short privacy note/);
+  assert.match(initialHtml, /Connect Acme/);
+  const errorHtml = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+    providerName: 'Acme', compact: true, status: 'error', device: null, error: 'Code expired',
+    connected: false, disclosure: 'Short privacy note', onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+  }));
+  assert.doesNotMatch(errorHtml, /Short privacy note/);
+  assert.match(errorHtml, /Code expired/);
+  assert.match(errorHtml, /Try again/);
+  assert.match(errorHtml, /Privacy/);
+  assert.match(errorHtml, /Help/);
 });
 
 test('AiQuickSettingsPanel exposes the provider, settings action, expired notice, and recovery slot', () => {

@@ -65,6 +65,9 @@ function spanishSignInStrings(providerName: string): Partial<DeviceCodeSignInStr
     troubleBody: 'La vista previa no envía solicitudes.',
     remember: 'Recordar en este navegador',
     privacySummary: 'Privacidad de esta vista previa',
+    signInTab: 'Acceso',
+    privacyTab: 'Privacidad',
+    helpTab: 'Ayuda',
   };
 }
 
@@ -149,6 +152,7 @@ function App() {
             </div>
             <DeviceCodeSignIn
               providerName={providerName}
+              compact
               status={status}
               device={device}
               error={demoState === 'error' ? (locale === 'es' ? 'Error de prueba. Inténtalo de nuevo.' : 'Preview error. Try again.') : undefined}

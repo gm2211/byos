@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ByosIcon } from './icons.js';
 
 /**
@@ -43,6 +43,9 @@ export type DeviceCodeSignInStrings = {
   troubleBody: string;
   remember: string;
   privacySummary: string;
+  signInTab: string;
+  privacyTab: string;
+  helpTab: string;
 };
 
 export function defaultDeviceCodeStrings(providerName: string): DeviceCodeSignInStrings {
@@ -78,6 +81,9 @@ export function defaultDeviceCodeStrings(providerName: string): DeviceCodeSignIn
     troubleBody: 'Keep this tab open while you approve the code.',
     remember: 'Remember on this browser',
     privacySummary: 'How sign-in and privacy work',
+    signInTab: 'Sign in',
+    privacyTab: 'Privacy',
+    helpTab: 'Help',
   };
 }
 
@@ -125,6 +131,8 @@ export type DeviceCodeSignInProps = {
   strings?: Partial<DeviceCodeSignInStrings>;
   /** Link target for the provider approval page; `_self` suits previews. */
   linkTarget?: '_blank' | '_self';
+  /** Compact connected-dialog layout with separate Sign in, Privacy, and Help tabs. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -136,6 +144,7 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
   const pending = !connected && (status === 'pending' || exchanging);
   const title = connected ? s.connectedTitle : pending ? exchanging ? s.exchangingTitle : device ? s.codeTitle : s.preparingTitle : s.connectTitle;
   const body = connected ? available ? s.connectedBody : s.connectedUnavailableBody : pending ? exchanging ? s.exchangingBody : device ? s.codeBody : s.preparingBody : s.connectBody;
+  if (props.compact) return <CompactDeviceCodeSignIn props={props} strings={s} pending={pending} exchanging={exchanging} available={available} title={title} body={body}/>;
   return <div className={`byos byos-signin${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading">
       <span className="byos-signin-provider">{props.providerName} <span>{s.planName}</span></span>
@@ -175,5 +184,81 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
         {props.privacyDetails}
       </details>}
     </div>}
+  </div>;
+}
+
+function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, available, title, body }: {
+  props: DeviceCodeSignInProps;
+  strings: DeviceCodeSignInStrings;
+  pending: boolean;
+  exchanging: boolean;
+  available: boolean;
+  title: string;
+  body: string;
+}) {
+  const id = useId();
+  const [activeTab, setActiveTab] = useState<'signin' | 'privacy' | 'help'>('signin');
+  const tabs = [
+    { id: 'signin' as const, label: strings.signInTab },
+    { id: 'privacy' as const, label: strings.privacyTab },
+    { id: 'help' as const, label: strings.helpTab },
+  ];
+  function activate(index: number, focus = false) {
+    const tab = tabs[index];
+    setActiveTab(tab.id);
+    if (focus) window.requestAnimationFrame(() => document.getElementById(`${id}-${tab.id}-tab`)?.focus());
+  }
+  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const index = tabs.findIndex(tab => tab.id === activeTab);
+    let next: number | undefined;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    if (next !== undefined) { event.preventDefault(); activate(next, true); }
+  }
+  const panelId = `${id}-panel`;
+  const activeTabId = `${id}-${activeTab}-tab`;
+  const showInitialDisclosure = !props.connected && !pending && props.status !== 'error';
+
+  return <div className={`byos byos-signin byos-signin-compact${props.className ? ` ${props.className}` : ''}`}>
+    <header className="byos-signin-heading byos-signin-compact-heading">
+      <span className="byos-signin-provider">{props.providerName} <span>{strings.planName}</span></span>
+      <h3 id={props.headingId} tabIndex={props.headingId ? -1 : undefined}>{title}</h3>
+      {(!pending || exchanging) && <p>{body}</p>}
+    </header>
+    <div className="byos-signin-compact-tabs" role="tablist" aria-label={strings.privacySummary} onKeyDown={onTabKeyDown}>
+      {tabs.map((tab, index) => <button key={tab.id} id={`${id}-${tab.id}-tab`} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={panelId} tabIndex={activeTab === tab.id ? 0 : -1} onClick={() => activate(index)}>{tab.label}</button>)}
+    </div>
+    <div className="byos-signin-compact-panel" id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
+      {activeTab === 'signin' && <>
+        {!available && <p className="byos-signin-unavailable" role="status">{strings.unavailable}</p>}
+        {showInitialDisclosure && props.disclosure && <p className="byos-signin-disclosure">{props.disclosure}</p>}
+        {props.connected ? <div className="byos-signin-connected byos-signin-compact-connected">
+          <p role="status"><ByosIcon name="check"/> {strings.connectedStatus}</p>
+          <button className="byos-signin-secondary" type="button" onClick={props.onDisconnect}>{strings.disconnect}</button>
+        </div> : pending ? <div className="byos-signin-device byos-signin-compact-device">
+          {props.device && !exchanging && <>
+            <SignInCode key={props.device.deviceAuthId} code={props.device.userCode} strings={strings}/>
+            <a className="byos-signin-primary" href={props.device.verificationUriComplete} target={props.linkTarget ?? '_blank'} rel="noopener noreferrer">{strings.continueButton} <ByosIcon name="external"/></a>
+          </>}
+          <div className="byos-signin-progress">
+            <p role="status"><span className="byos-signin-dot" aria-hidden="true"/>{exchanging ? strings.completing : props.device ? strings.waiting : strings.starting}</p>
+            <button className="byos-signin-cancel" type="button" onClick={props.onCancel}>{strings.cancel}</button>
+          </div>
+        </div> : <>
+          {props.error && <p className="byos-signin-error" role="alert">{props.error}</p>}
+          <button className="byos-signin-primary" type="button" disabled={!available} onClick={props.onStart}>{!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}</button>
+        </>}
+      </>}
+      {activeTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>
+        {props.remember && <div className="byos-signin-storage byos-signin-compact-storage">
+          <label><input type="checkbox" checked={props.remember.checked} onChange={event => props.remember!.onChange(event.target.checked)}/><span>{strings.remember}</span></label>
+          {props.remember.error && <p className="byos-signin-storage-error" role="alert">{props.remember.error}</p>}
+        </div>}
+        <div className="byos-signin-compact-privacy-content">{props.privacyDetails ?? <p>{strings.privacySummary}</p>}</div>
+      </div>}
+      {activeTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
+    </div>
   </div>;
 }

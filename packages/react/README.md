@@ -4,7 +4,8 @@ React UI for the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
 - `DeviceCodeSignIn`: one-time-code subscription sign-in (idle, preparing, code, completing, error,
-  connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure.
+  connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure. Opt into
+  compact Sign in, Privacy, and Help tabs for short setup dialogs.
 - `ModelEffortPicker`: model and effort from the provider's own list, using the shared searchable
   combobox by default; `renderSelect` preserves an application-owned control when needed.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
@@ -58,7 +59,7 @@ Use `className` on `DeviceCodeSignIn` and `AiPill`; `ModelEffortPicker` also sup
 `field`, `note`, and `retry` class names. `AiPill` supports button, prefix, label, popover, and
 backdrop class names. These can scope app-specific CSS while preserving the package defaults.
 
-`DeviceCodeSignIn`, `ModelEffortPicker`, `AiQuickSettingsPanel`, `AiAccountSettings`, and `AiProviderPicker` localize UI copy through their `strings` props. `DeviceCodeSignIn` accepts an optional `headingId` for dialog focus management.
+`DeviceCodeSignIn`, `ModelEffortPicker`, `AiQuickSettingsPanel`, `AiAccountSettings`, and `AiProviderPicker` localize UI copy through their `strings` props. `DeviceCodeSignIn` accepts an optional `headingId` for dialog focus management and `compact` for a tabbed presentation. In compact mode, Remember and full privacy details appear on Privacy; code, approval, progress, and cancel stay on Sign in; Help carries sign-in guidance. The short disclosure appears before initial sign-in and is omitted while waiting. ArrowLeft/ArrowRight, Home, and End move between tabs. The default presentation remains unchanged.
 `AiPill` uses the explicit label props listed below. For example:
 
 ```tsx
