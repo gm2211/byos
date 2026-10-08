@@ -1,5 +1,6 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ByosIcon } from './icons.js';
+import { ChatGPTMark } from './ChatGPTMark.js';
 
 /**
  * Device-code subscription sign-in (Codex, Grok...): show a one-time code, send the user to the
@@ -131,6 +132,8 @@ export type DeviceCodeSignInProps = {
   strings?: Partial<DeviceCodeSignInStrings>;
   /** Link target for the provider approval page; `_self` suits previews. */
   linkTarget?: '_blank' | '_self';
+  /** Adds ChatGPT's official monochrome button presentation to device-code sign-in actions. */
+  signInBrand?: 'chatgpt';
   /** Compact connected-dialog layout with separate Sign in, Privacy, and Help tabs. */
   compact?: boolean;
   className?: string;
@@ -173,7 +176,7 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
       </details>}
     </div> : <>
       {error && <p className="byos-signin-error" role="alert">{error}</p>}
-      <button className="byos-signin-primary" type="button" disabled={!available} onClick={props.onStart}>{!available ? s.unavailableButton : status === 'error' ? s.retryButton : s.connectButton} {available && <ByosIcon name="external"/>}</button>
+      <DeviceCodeStartButton props={props} available={available} label={!available ? s.unavailableButton : status === 'error' ? s.retryButton : s.connectButton}/>
     </>}
 
     {(props.remember || props.privacyDetails) && <div className="byos-signin-storage">
@@ -185,6 +188,15 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
       </details>}
     </div>}
   </div>;
+}
+
+function DeviceCodeStartButton({ props, label, available }: { props: DeviceCodeSignInProps; label: string; available: boolean }) {
+  const brandClass = props.signInBrand === 'chatgpt' ? ' byos-chatgpt-identity-button byos-chatgpt-identity-black' : '';
+  return <button className={`byos-signin-primary${brandClass}`} type="button" disabled={!available} onClick={props.onStart}>
+    {props.signInBrand === 'chatgpt' && <ChatGPTMark variant="black"/>}
+    <span>{label}</span>
+    {available && props.signInBrand !== 'chatgpt' && <ByosIcon name="external"/>}
+  </button>;
 }
 
 function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, available, title, body }: {
@@ -248,7 +260,7 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
           </div>
         </div> : <>
           {props.error && <p className="byos-signin-error" role="alert">{props.error}</p>}
-          <button className="byos-signin-primary" type="button" disabled={!available} onClick={props.onStart}>{!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}</button>
+          <DeviceCodeStartButton props={props} available={available} label={!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}/>
         </>}
       </>}
       {activeTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>

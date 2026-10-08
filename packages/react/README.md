@@ -124,6 +124,8 @@ your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
 
 `SignInWithChatGPT` renders a 44px native link to the host's website OIDC start route, or a disabled button when `status="unavailable"`. `variant="black" | "white"` selects an approved monochrome sign-in button and bundled official OpenAI vector mark. `onStart` runs synchronously for a normal primary click before the browser follows `href`; pending, success, and unavailable states disable the action. Its inline vector path is taken directly from the official white and black marks in [OpenAI’s website sign-in button assets](https://developers.openai.com/assets/siwc/sign-in-buttons/). Localize `heading`, `description`, button, and state labels through `strings`; provide a product-specific `disclosure` that separates ChatGPT identity from plan usage. The component does not start OAuth itself and does not imply that identity grants ChatGPT subscription usage.
 
+`DeviceCodeSignIn` accepts `signInBrand="chatgpt"` when a provider's device-code flow should use ChatGPT's official monochrome mark and black button styling. This changes presentation only: the existing localized Connect/Try again labels, `onStart` callback, and device-code approval flow remain in effect. It does not represent website identity sign-in or connect the account through OpenID.
+
 ```tsx
 <SignInWithChatGPT
   href="/auth/chatgpt/start"
