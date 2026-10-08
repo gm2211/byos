@@ -39,6 +39,10 @@ export function AiPill(props: AiPillProps) {
   const sheetQuery = props.sheetQuery ?? '(max-width: 720px)';
 
   useEffect(() => {
+    if (!props.connected) setOpen(false);
+  }, [props.connected]);
+
+  useEffect(() => {
     if (!open) return;
     const onPointer = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -83,7 +87,7 @@ export function AiPill(props: AiPillProps) {
     >
       <i/> <span className={c.prefix ?? 'byos-pill-prefix'}>{props.prefix ?? 'AI'}</span><span className={c.label ?? 'byos-pill-label'}>{label}</span>
     </button>
-    {open && (sheet
+    {open && props.connected && (sheet
       ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, props.portalContainer ?? document.body)
       : popover)}
   </div>;
