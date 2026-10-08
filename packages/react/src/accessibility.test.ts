@@ -200,7 +200,8 @@ test('SignInWithChatGPT presents the approved route, identity-only disclosure, a
   }));
   assert.match(html, /Continue with ChatGPT/);
   assert.match(html, /href="\/auth\/chatgpt\/start"/);
-  assert.match(html, /chatgpt-logo-black\.svg/);
+  assert.match(html, /<svg[^>]*viewBox="0 0 21 21"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(html, /chatgpt-logo-(black|white)\.svg/);
   assert.match(html, /ChatGPT identity signs in to this app only/);
   assert.match(html, /aria-labelledby="byos-chatgpt-identity-/);
 
