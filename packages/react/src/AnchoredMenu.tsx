@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 type MenuLayout = {
@@ -11,8 +11,8 @@ type MenuLayout = {
 };
 
 type AnchoredMenuProps = {
-  anchorRef: RefObject<HTMLElement | null>;
-  menuRef: RefObject<HTMLDivElement | null>;
+  anchorRef: { readonly current: HTMLElement | null };
+  menuRef: { readonly current: HTMLDivElement | null };
   contentKey: string | number;
   children: ReactNode;
   portalContainer?: Element;

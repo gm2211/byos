@@ -35,6 +35,8 @@ export type AiAccountSettingsProps = {
   recoveryAction?: ReactNode;
   strings?: Partial<AiAccountSettingsStrings>;
   className?: string;
+  /** Preserve host-owned sign-in/download state while inactive panes stay hidden. */
+  keepPanelsMounted?: boolean;
 };
 
 export function AiAccountSettings(props: AiAccountSettingsProps) {
@@ -49,7 +51,7 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
   ];
   const active = tabs.find(tab => tab.id === activeTab) ?? tabs[0];
   const activeTabId = `${generatedId}-${active.id}-tab`;
-  const panelId = `${generatedId}-panel`;
+  const panelId = props.keepPanelsMounted ? `${generatedId}-${active.id}-panel` : `${generatedId}-panel`;
 
   function selectTab(id: AiAccountSettingsTab, focus = false) {
     setActiveTab(id);
@@ -81,9 +83,18 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
     <div className={`byos-account-settings-tabs byos-account-settings-tabs-${tabs.length}`} role="tablist" aria-label={strings.heading} onKeyDown={onTabKeyDown}>
       {tabs.map(tab => {
         const tabId = `${generatedId}-${tab.id}-tab`;
-        return <button key={tab.id} id={tabId} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={panelId} tabIndex={activeTab === tab.id ? 0 : -1} className="byos-account-settings-tab" onClick={() => selectTab(tab.id)}>{tab.label}</button>;
+        return <button key={tab.id} id={tabId} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={props.keepPanelsMounted ? `${generatedId}-${tab.id}-panel` : panelId} tabIndex={activeTab === tab.id ? 0 : -1} className="byos-account-settings-tab" onClick={() => selectTab(tab.id)}>{tab.label}</button>;
       })}
     </div>
+    {props.keepPanelsMounted ? tabs.map(tab => (
+      <div key={tab.id} id={`${generatedId}-${tab.id}-panel`} className="byos-account-settings-panel" role="tabpanel" aria-labelledby={`${generatedId}-${tab.id}-tab`} hidden={active.id !== tab.id}>
+        {props.expired && tab.id === 'model' && <p className="byos-account-settings-expired" role="status">
+          <span>{strings.expiredModelNote}</span>
+          <button type="button" onClick={() => selectTab('account', true)}>{strings.openAccountTab}</button>
+        </p>}
+        {tab.content}
+      </div>
+    )) : (
     <div id={panelId} className="byos-account-settings-panel" role="tabpanel" aria-labelledby={activeTabId}>
       {props.expired && activeTab === 'model' && <p className="byos-account-settings-expired" role="status">
         <span>{strings.expiredModelNote}</span>
@@ -91,5 +102,6 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
       </p>}
       {active.content}
     </div>
+    )}
   </section>;
 }

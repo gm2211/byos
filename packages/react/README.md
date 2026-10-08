@@ -134,3 +134,5 @@ your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
   disclosure={<p>ChatGPT identity signs in to this app. It does not connect an AI plan.</p>}
 />
 ```
+
+Set `AiAccountSettings.keepPanelsMounted` for host-owned sign-in or download workflows that must survive tab changes. Inactive panels use HTML `hidden`, with distinct panel IDs and matching `aria-controls`; default behavior still mounts only the active pane.
