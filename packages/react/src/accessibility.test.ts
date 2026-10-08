@@ -89,6 +89,45 @@ test('compact DeviceCodeSignIn shows initial disclosure and compact error recove
   assert.match(errorHtml, /Help/);
 });
 
+test('ChatGPT-branded device-code start and retry actions keep the device flow actionable in both layouts', () => {
+  for (const compact of [false, true]) {
+    const idle = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+      providerName: 'ChatGPT', signInBrand: 'chatgpt', compact, status: 'idle', device: null,
+      connected: false, onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+    }));
+    assert.match(idle, /byos-chatgpt-identity-button byos-chatgpt-identity-black/);
+    assert.match(idle, /<svg[^>]*viewBox="0 0 21 21"[^>]*aria-hidden="true"/);
+    assert.match(idle, /<button[^>]*type="button"[^>]*>.*Connect ChatGPT/s);
+    assert.doesNotMatch(idle, /disabled/);
+    assert.doesNotMatch(idle, /Sign in with ChatGPT|Continue with ChatGPT/);
+
+    const retry = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+      providerName: 'ChatGPT', signInBrand: 'chatgpt', compact, status: 'error', device: null,
+      error: 'Sign-in expired', connected: false,
+      onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+    }));
+    assert.match(retry, /<button[^>]*type="button"[^>]*>.*Try again/s);
+    assert.doesNotMatch(retry, /disabled/);
+    assert.match(retry, /byos-chatgpt-identity-button byos-chatgpt-identity-black/);
+  }
+
+  let started = 0;
+  const rendered = DeviceCodeSignIn({
+    providerName: 'ChatGPT', signInBrand: 'chatgpt', status: 'idle', device: null, connected: false,
+    onStart: () => { started += 1; }, onCancel: () => undefined, onDisconnect: () => undefined,
+  });
+  const findStartButton = (node: unknown): { props: { onClick?: () => void } } | undefined => {
+    if (Array.isArray(node)) return node.map(findStartButton).find(Boolean);
+    if (!node || typeof node !== 'object') return undefined;
+    const element = node as { type?: unknown; props?: { children?: unknown; onClick?: () => void } };
+    if (element.type === 'button' && element.props?.onClick) return { props: element.props };
+    if (typeof element.type === 'function') return findStartButton((element.type as (props: unknown) => unknown)(element.props));
+    return findStartButton(element.props?.children);
+  };
+  findStartButton(rendered)?.props.onClick?.();
+  assert.equal(started, 1);
+});
+
 test('AiQuickSettingsPanel exposes the provider, settings action, expired notice, and recovery slot', () => {
   const html = renderToStaticMarkup(createElement(AiQuickSettingsPanel, {
     providerName: 'Acme AI', connection: 'expired', onOpenSettings: () => undefined,
