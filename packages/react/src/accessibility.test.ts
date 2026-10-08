@@ -128,6 +128,31 @@ test('ChatGPT-branded device-code start and retry actions keep the device flow a
   assert.equal(started, 1);
 });
 
+test('compact DeviceCodeSignIn can hide redundant identity and reveal help only for pending and error states', () => {
+  const base = {
+    providerName: 'Acme', compact: true, showProviderIdentity: false, helpMode: 'contextual' as const,
+    connected: false, onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined,
+  };
+  const idleHtml = renderToStaticMarkup(createElement(DeviceCodeSignIn, { ...base, status: 'idle', device: null }));
+  assert.match(idleHtml, /role="tablist"[^>]*>[\s\S]*?<\/div>/);
+  assert.equal((idleHtml.match(/role="tab"/g) ?? []).length, 2);
+  assert.doesNotMatch(idleHtml, /class="byos-signin-provider"|Subscription|>Help<|Having trouble/);
+  assert.match(idleHtml, /aria-selected="true" aria-controls=/);
+  assert.match(idleHtml, /tabindex="-1"/);
+
+  const pendingHtml = renderToStaticMarkup(createElement(DeviceCodeSignIn, {
+    ...base, status: 'pending', device: { deviceAuthId: 'demo', userCode: 'ABCD-EFGH', verificationUriComplete: 'https://example.test/approve' },
+  }));
+  assert.equal((pendingHtml.match(/role="tab"/g) ?? []).length, 2);
+  assert.match(pendingHtml, /<details class="byos-signin-help"><summary>Having trouble signing in\?<\/summary><p>Keep this tab open while you approve the code\.<\/p><\/details>/);
+
+  const errorHtml = renderToStaticMarkup(createElement(DeviceCodeSignIn, { ...base, status: 'error', device: null, error: 'Code expired' }));
+  assert.equal((errorHtml.match(/role="tab"/g) ?? []).length, 2);
+  assert.match(errorHtml, /Code expired/);
+  assert.match(errorHtml, /Try signing in again/);
+  assert.doesNotMatch(errorHtml, /Keep this tab open/);
+});
+
 test('AiQuickSettingsPanel exposes the provider, settings action, expired notice, and recovery slot', () => {
   const html = renderToStaticMarkup(createElement(AiQuickSettingsPanel, {
     providerName: 'Acme AI', connection: 'expired', onOpenSettings: () => undefined,

@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ByosIcon } from './icons.js';
 import { ChatGPTMark } from './ChatGPTMark.js';
 
@@ -42,6 +42,7 @@ export type DeviceCodeSignInStrings = {
   disconnect: string;
   troubleSummary: string;
   troubleBody: string;
+  troubleErrorBody?: string;
   remember: string;
   privacySummary: string;
   signInTab: string;
@@ -80,6 +81,7 @@ export function defaultDeviceCodeStrings(providerName: string): DeviceCodeSignIn
     disconnect: `Disconnect ${providerName}`,
     troubleSummary: 'Having trouble signing in?',
     troubleBody: 'Keep this tab open while you approve the code.',
+    troubleErrorBody: 'Try signing in again. If the problem continues, check your connection and try again.',
     remember: 'Remember on this browser',
     privacySummary: 'How sign-in and privacy work',
     signInTab: 'Sign in',
@@ -136,6 +138,10 @@ export type DeviceCodeSignInProps = {
   signInBrand?: 'chatgpt';
   /** Compact connected-dialog layout with separate Sign in, Privacy, and Help tabs. */
   compact?: boolean;
+  /** Whether to show the provider and plan eyebrow. Defaults to true. */
+  showProviderIdentity?: boolean;
+  /** Keep Help as a tab (default), or show it inside Sign in only while a code is pending or sign-in has failed. */
+  helpMode?: 'tab' | 'contextual';
   className?: string;
 };
 
@@ -150,7 +156,7 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
   if (props.compact) return <CompactDeviceCodeSignIn props={props} strings={s} pending={pending} exchanging={exchanging} available={available} title={title} body={body}/>;
   return <div className={`byos byos-signin${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading">
-      <span className="byos-signin-provider">{props.providerName} <span>{s.planName}</span></span>
+      {props.showProviderIdentity !== false && <span className="byos-signin-provider">{props.providerName} <span>{s.planName}</span></span>}
       <h3 id={props.headingId} tabIndex={props.headingId ? -1 : undefined}>{title}</h3>
       <p>{body}</p>
     </header>
@@ -210,18 +216,24 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
 }) {
   const id = useId();
   const [activeTab, setActiveTab] = useState<'signin' | 'privacy' | 'help'>('signin');
+  const contextualHelpAvailable = props.helpMode === 'contextual';
+  const showContextualHelp = contextualHelpAvailable && ((pending && !!props.device && !exchanging) || props.status === 'error');
   const tabs = [
     { id: 'signin' as const, label: strings.signInTab },
     { id: 'privacy' as const, label: strings.privacyTab },
-    { id: 'help' as const, label: strings.helpTab },
+    ...(contextualHelpAvailable ? [] : [{ id: 'help' as const, label: strings.helpTab }]),
   ];
+  const selectedTab = tabs.some(tab => tab.id === activeTab) ? activeTab : 'signin';
+  useEffect(() => {
+    if (selectedTab !== activeTab) setActiveTab(selectedTab);
+  }, [activeTab, selectedTab]);
   function activate(index: number, focus = false) {
     const tab = tabs[index];
     setActiveTab(tab.id);
     if (focus) window.requestAnimationFrame(() => document.getElementById(`${id}-${tab.id}-tab`)?.focus());
   }
   function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const index = tabs.findIndex(tab => tab.id === activeTab);
+    const index = tabs.findIndex(tab => tab.id === selectedTab);
     let next: number | undefined;
     if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
     else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
@@ -230,20 +242,20 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
     if (next !== undefined) { event.preventDefault(); activate(next, true); }
   }
   const panelId = `${id}-panel`;
-  const activeTabId = `${id}-${activeTab}-tab`;
+  const activeTabId = `${id}-${selectedTab}-tab`;
   const showInitialDisclosure = !props.connected && !pending && props.status !== 'error';
 
   return <div className={`byos byos-signin byos-signin-compact${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading byos-signin-compact-heading">
-      <span className="byos-signin-provider">{props.providerName} <span>{strings.planName}</span></span>
+      {props.showProviderIdentity !== false && <span className="byos-signin-provider">{props.providerName} <span>{strings.planName}</span></span>}
       <h3 id={props.headingId} tabIndex={props.headingId ? -1 : undefined}>{title}</h3>
       {(!pending || exchanging) && <p>{body}</p>}
     </header>
-    <div className="byos-signin-compact-tabs" role="tablist" aria-label={strings.privacySummary} onKeyDown={onTabKeyDown}>
-      {tabs.map((tab, index) => <button key={tab.id} id={`${id}-${tab.id}-tab`} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={panelId} tabIndex={activeTab === tab.id ? 0 : -1} onClick={() => activate(index)}>{tab.label}</button>)}
+    <div className={`byos-signin-compact-tabs${contextualHelpAvailable ? ' byos-signin-compact-tabs-two' : ''}`} role="tablist" aria-label={strings.privacySummary} onKeyDown={onTabKeyDown}>
+      {tabs.map((tab, index) => <button key={tab.id} id={`${id}-${tab.id}-tab`} type="button" role="tab" aria-selected={selectedTab === tab.id} aria-controls={panelId} tabIndex={selectedTab === tab.id ? 0 : -1} onClick={() => activate(index)}>{tab.label}</button>)}
     </div>
     <div className="byos-signin-compact-panel" id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
-      {activeTab === 'signin' && <>
+      {selectedTab === 'signin' && <>
         {!available && <p className="byos-signin-unavailable" role="status">{strings.unavailable}</p>}
         {showInitialDisclosure && props.disclosure && <p className="byos-signin-disclosure">{props.disclosure}</p>}
         {props.connected ? <div className="byos-signin-connected byos-signin-compact-connected">
@@ -262,15 +274,16 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
           {props.error && <p className="byos-signin-error" role="alert">{props.error}</p>}
           <DeviceCodeStartButton props={props} available={available} label={!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}/>
         </>}
+        {showContextualHelp && <details className="byos-signin-help"><summary>{strings.troubleSummary}</summary><p>{props.status === 'error' ? strings.troubleErrorBody ?? strings.troubleBody : strings.troubleBody}</p></details>}
       </>}
-      {activeTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>
+      {selectedTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>
         {props.remember && <div className="byos-signin-storage byos-signin-compact-storage">
           <label><input type="checkbox" checked={props.remember.checked} onChange={event => props.remember!.onChange(event.target.checked)}/><span>{strings.remember}</span></label>
           {props.remember.error && <p className="byos-signin-storage-error" role="alert">{props.remember.error}</p>}
         </div>}
         <div className="byos-signin-compact-privacy-content">{props.privacyDetails ?? <p>{strings.privacySummary}</p>}</div>
       </div>}
-      {activeTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
+      {selectedTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
     </div>
   </div>;
 }
