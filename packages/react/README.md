@@ -118,7 +118,7 @@ Account. Provider changes, account controls, and tool actions remain application
 />
 ```
 
-React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
+React 18 and 19 are supported, including nullable DOM refs in menus and popovers. React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
 your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
 
 

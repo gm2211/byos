@@ -93,6 +93,6 @@ export function AiPill(props: AiPillProps) {
   </div>;
 }
 
-function Popover({ id, label, className, sheetRef, children }: { id: string; label: string; className: string; sheetRef: RefObject<HTMLDivElement>; children: ReactNode }) {
+function Popover({ id, label, className, sheetRef, children }: { id: string; label: string; className: string; sheetRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
   return <div className={className} ref={sheetRef} id={id} role="dialog" aria-label={label}>{children}</div>;
 }

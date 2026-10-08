@@ -11,8 +11,8 @@ type MenuLayout = {
 };
 
 type AnchoredMenuProps = {
-  anchorRef: RefObject<HTMLElement>;
-  menuRef: RefObject<HTMLDivElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  menuRef: RefObject<HTMLDivElement | null>;
   contentKey: string | number;
   children: ReactNode;
   portalContainer?: Element;

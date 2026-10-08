@@ -2,7 +2,11 @@
   "skim": {
     "repository": "gm2211/skim",
     "mode": "packages",
-    "packages": ["core", "providers"],
+    "packages": [
+      "core",
+      "providers",
+      "react"
+    ],
     "output": "shared",
     "namePrefix": "byos-",
     "revision": "shared/BYOS_REVISION",
