@@ -5,9 +5,10 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
 - `DeviceCodeSignIn`: one-time-code subscription sign-in (idle, preparing, code, completing, error,
   connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure.
-- `ModelEffortPicker`: model and effort from the provider's own list; `renderSelect` swaps in your
-  own select.
+- `ModelEffortPicker`: model and effort from the provider's own list, using the shared searchable
+  combobox by default; `renderSelect` preserves an application-owned control when needed.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
+- `AiQuickSettingsPanel`: reusable provider heading, settings action, connection notice, and settings body for `AiPill` or standalone use.
 - `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.
 - `useProviderModels`, `useEffortChoice`: headless hooks over `@byos/core`.
 
@@ -45,15 +46,17 @@ Set variables on an ancestor to theme each component, or on one wrapper to theme
 On mobile, `AiPill` portals its sheet to `document.body`; set tokens there or pass
 `portalContainer` pointing to a themed overlay root outside clipped containers.
 Unspecified variables use the neutral defaults. The full token list is font, font-mono, text, muted,
-faint, surface, surface-soft, surface-raised, surface-input, line, line-strong, accent,
-accent-strong, on-accent, success, warning, warning-soft, danger, radius, radius-lg, and shadow
+faint, surface, surface-soft, surface-raised, surface-input, surface-overlay, surface-backdrop,
+line, line-strong, accent, accent-strong, on-accent, success, warning, warning-soft, danger,
+secondary-fill, secondary-border, secondary-hover, pill-fill, pill-border, pill-text, radius,
+radius-lg, and shadow
 (each uses the `--byos-` prefix).
 
 Use `className` on `DeviceCodeSignIn` and `AiPill`; `ModelEffortPicker` also supports the `root`,
 `field`, `note`, and `retry` class names. `AiPill` supports button, prefix, label, popover, and
 backdrop class names. These can scope app-specific CSS while preserving the package defaults.
 
-`DeviceCodeSignIn` and `ModelEffortPicker` localize UI copy through their `strings` props.
+`DeviceCodeSignIn`, `ModelEffortPicker`, and `AiQuickSettingsPanel` localize UI copy through their `strings` props.
 `AiPill` uses the explicit label props listed below. For example:
 
 ```tsx
@@ -75,9 +78,15 @@ backdrop class names. These can scope app-specific CSS while preserving the pack
 ```
 
 `AiPill` exposes `setupLabel`, `prefix`, and `popoverLabel`, plus `setupAriaLabel` and `ariaLabel`
-for localized accessible names. Replace the picker control with `renderSelect` when your design
-system needs a searchable select. Edit `src/styles.src.css` and run `npm run css` only when changing
+for localized accessible names. The default searchable picker accepts `portalContainer` when its
+menu needs to stay inside a themed overlay root; use `renderSelect` when an application owns the
+control itself. Edit `src/styles.src.css` and run `npm run css` only when changing
 the package's default CSS; the generated `src/styles.css` is the file consumers import.
+
+`AiQuickSettingsPanel` accepts `connection` as `connected`, `expired`, `disconnected`, or `tools-only`.
+It owns the provider header, settings action, state copy, and content spacing; pass an optional
+`reconnectAction` for expired connections. `defaultAiQuickSettingsStrings` provides the English
+defaults. It does not perform authentication or select providers.
 
 React is a peer dependency. When consuming this package through a `file:` link, dedupe React in
 your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).

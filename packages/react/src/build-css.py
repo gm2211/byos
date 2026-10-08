@@ -7,6 +7,10 @@ DEFAULTS = {
   'line': '#e2e5eb', 'line-strong': '#cdd2da',
   'accent': '#2f5bd3', 'accent-strong': '#2448ad', 'on-accent': '#ffffff',
   'success': '#1f7a4d', 'warning': '#b26b00', 'warning-soft': '#fbf1de', 'danger': '#c2352b',
+  'secondary-fill': '#f6f7f9', 'secondary-border': '#cdd2da', 'secondary-hover': '#eef0f4',
+  'surface-overlay': '#ffffff', 'surface-backdrop': 'rgb(0 0 0 / .35)',
+  'pill-fill': 'var(--byos-surface, #ffffff)',
+  'pill-border': 'var(--byos-accent, #2f5bd3)', 'pill-text': 'var(--byos-accent-strong, #2448ad)',
   'radius': '8px', 'radius-lg': '14px', 'shadow': '0 24px 60px -24px rgb(0 0 0 / .35)',
 }
 src = open(sys.argv[1]).read()

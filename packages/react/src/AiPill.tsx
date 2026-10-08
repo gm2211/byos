@@ -8,6 +8,8 @@ import { createPortal } from 'react-dom';
  */
 export type AiPillProps = {
   connected: boolean;
+  /** Mark a connected account that needs reauthentication. */
+  needsSignIn?: boolean;
   /** e.g. "gpt-5.6-sol · low". */
   label: string;
   setupLabel?: string;
@@ -35,6 +37,10 @@ export function AiPill(props: AiPillProps) {
   const popoverId = useId();
   const c = props.classNames ?? {};
   const sheetQuery = props.sheetQuery ?? '(max-width: 720px)';
+
+  useEffect(() => {
+    if (!props.connected) setOpen(false);
+  }, [props.connected]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +78,7 @@ export function AiPill(props: AiPillProps) {
   return <div className={`${props.className ?? 'byos byos-pill-root'}`} ref={rootRef}>
     <button
       type="button"
-      className={`${c.button ?? 'byos-pill'}${props.connected ? ' connected' : ''}`}
+      className={`${c.button ?? 'byos-pill'}${props.connected ? ' connected' : ''}${props.needsSignIn ? ' byos-pill-needs-sign-in' : ''}`}
       aria-haspopup={props.connected ? 'dialog' : undefined}
       aria-expanded={props.connected ? open : undefined}
       aria-controls={props.connected && open ? popoverId : undefined}
@@ -81,7 +87,7 @@ export function AiPill(props: AiPillProps) {
     >
       <i/> <span className={c.prefix ?? 'byos-pill-prefix'}>{props.prefix ?? 'AI'}</span><span className={c.label ?? 'byos-pill-label'}>{label}</span>
     </button>
-    {open && (sheet
+    {open && props.connected && (sheet
       ? createPortal(<><div className={c.backdrop ?? 'byos-pill-backdrop'} aria-hidden="true"/>{popover}</>, props.portalContainer ?? document.body)
       : popover)}
   </div>;

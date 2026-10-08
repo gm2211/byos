@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
+import { SearchableSelect } from './SearchableSelect.js';
 
 /**
  * The exact model and effort, both from the provider's own model list. `renderSelect` lets a site
- * drop in its own searchable select; the default is a native <select>.
+ * drop in its own searchable select; the default is the shared searchable combobox.
  */
 export type PickerOption = { value: string; label: string; meta?: string };
 export type SelectRenderer = (props: { ariaLabel: string; value: string; options: PickerOption[]; onChange: (value: string) => void }) => ReactNode;
@@ -48,21 +49,18 @@ export type ModelEffortPickerProps = {
   staleness?: 'live' | 'remembered' | 'fallback';
   onRetry?: () => void;
   renderSelect?: SelectRenderer;
+  /** Theme the default searchable menu when the picker is rendered in a portal. */
+  portalContainer?: Element;
   strings?: Partial<ModelEffortPickerStrings>;
   classNames?: { root?: string; field?: string; note?: string; retry?: string };
 };
-
-const nativeSelect: SelectRenderer = ({ ariaLabel, value, options, onChange }) =>
-  <select className="byos-select" aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value)}>
-    {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-  </select>;
 
 export function ModelEffortPicker(props: ModelEffortPickerProps) {
   const s = { ...defaultModelEffortStrings, ...props.strings };
   s.modelAriaLabel = props.strings?.modelAriaLabel ?? props.strings?.model ?? defaultModelEffortStrings.modelAriaLabel;
   s.effortAriaLabel = props.strings?.effortAriaLabel ?? props.strings?.effort ?? defaultModelEffortStrings.effortAriaLabel;
   const c = props.classNames ?? {};
-  const select = props.renderSelect ?? nativeSelect;
+  const select = props.renderSelect ?? (selectProps => <SearchableSelect {...selectProps} compact portalContainer={props.portalContainer} />);
   const field = c.field ?? 'byos-field';
   const note = c.note ?? 'byos-note';
   const stale = props.staleness === 'remembered' || props.staleness === 'fallback';
@@ -80,6 +78,6 @@ export function ModelEffortPicker(props: ModelEffortPickerProps) {
         : select({ ariaLabel: s.effortAriaLabel, value: '', options: [{ value: '', label: s.providerDefault }], onChange: () => undefined })}
       {props.efforts.length === 0 && <p className={note}>{s.noEffort(props.providerName)}</p>}
     </div>
-    {stale && <p className={note}>{props.staleness === 'remembered' ? s.remembered(props.providerName) : s.fallback(props.providerName)}{props.onRetry && <> <button type="button" className={c.retry ?? 'byos-link-button'} onClick={props.onRetry}>{s.retry}</button></>}</p>}
+    {stale && <div className="byos-picker-stale"><p className={note}>{props.staleness === 'remembered' ? s.remembered(props.providerName) : s.fallback(props.providerName)}</p>{props.onRetry && <button type="button" className={c.retry ?? 'byos-secondary-button'} onClick={props.onRetry}>{s.retry}</button>}</div>}
   </div>;
 }
