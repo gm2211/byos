@@ -4,12 +4,13 @@
  * shape, headers, size limits, credential-echo guard and final-answer selection. Tool calls, web
  * search and images are left out; this adapter is plain chat.
  */
+import { CODEX_ACCOUNT_CATALOG_URL } from '@byos/core';
 import type { CatalogModel, ChatEvent, ChatMessage, ReasoningEffort } from '@byos/core';
 import { iterateSseEvents } from '@byos/providers';
 import { codexAccountId, isRecord, type CodexCredential, type CodexFetch } from './sign-in.js';
 
 export const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
-export const CODEX_ACCOUNT_CATALOG_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=0.153.2';
+export { CODEX_ACCOUNT_CATALOG_URL } from '@byos/core';
 const MAX_PROMPT_CHARS = 1_000_000;
 const MAX_REQUEST_BYTES = 15 * 1024 * 1024;
 const MAX_STREAM_TEXT_CHARS = 4 * 1024 * 1024;
