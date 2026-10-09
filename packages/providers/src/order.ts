@@ -11,7 +11,7 @@ export const DEFAULT_SERVICE_ORDER: readonly ServiceKey[] = ['grok', 'chatgpt', 
 
 /** Why a service is listed but not recommended; absent means recommended. */
 export const NOT_RECOMMENDED_REASON: Partial<Record<ServiceKey, string>> = {
-  claude: "Anthropic doesn't allow subscriptions in other apps.",
+  claude: "Anthropic doesn't allow subscription sign-in in other apps; use an API key (Max and Team plans include API credits).",
 };
 
 /** Sorts `items` by `order`; items whose key is not in `order` keep their relative place at the end. */
