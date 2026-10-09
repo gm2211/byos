@@ -110,6 +110,8 @@ test('Claude: API key only while subscriptions are paused; models and effort com
   assert.equal(claudeCredentialAllowed('sk-ant-oat01-x'), false);
   assert.equal(claudeCredentialAllowed('sk-ant-oat01-x', false), true);
   assert.deepEqual(claude().signIn.map(method => method.kind), ['api-key']);
+  const setup = claude().signIn[0].kind === 'api-key' ? claude().signIn[0].setup ?? [] : [];
+  assert.deepEqual(setup.map(step => new URL(step.url).host), ['claude.ai', 'platform.claude.com']);
   const calls = fakeFetch(() => new Response(JSON.stringify({ data: [
     { id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', capabilities: { effort: { supported: true, low: { supported: true }, max: { supported: true } } } },
   ] })));
