@@ -4,7 +4,9 @@ Browser half of the Codex subscription transport in the bring-your-own-subscript
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
 `createCodexTlsFetch(options)` returns a `fetch()` limited to OpenAI's Codex sign-in, refresh,
-account-catalog and Responses routes. It runs TLS 1.3 inside the page (rustls compiled to WASM,
+account-catalog and Responses routes, plus exactly `POST https://auth.x.ai/oauth2/token` (no query)
+for renewing a Grok token inside browser TLS. That xAI route needs the relay's opt-in `xai-auth`
+destination, accepts only `Content-Type` and `Accept` headers, and sends no Codex identity headers. It runs TLS 1.3 inside the page (rustls compiled to WASM,
 certificate-checked against webpki roots) and sends only ciphertext through the site's relay
 (`@byos/server` `createCodexRelay`). The relay cannot read OpenAI credentials, provider HTTP headers, or provider request/response bodies. It does receive the application’s own session token (from the configured header or cookie) to authorize tickets, plus connection metadata.
 

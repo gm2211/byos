@@ -1,7 +1,8 @@
 /**
  * Browser-owned TLS to OpenAI for Codex subscriptions. The page runs rustls (WASM) itself and sends
- * only TLS ciphertext through the site's relay (@byos/server createCodexRelay) to two fixed hosts.
- * Only the Codex sign-in, refresh, account catalog and Responses routes are allowed.
+ * only TLS ciphertext through the site's relay (@byos/server createCodexRelay) to fixed hosts.
+ * Only the Codex sign-in, refresh, account catalog and Responses routes are allowed, plus the
+ * single Grok (xAI) token refresh, POST https://auth.x.ai/oauth2/token (relay opt-in `xai-auth`).
  *
  * Extracted from Motive's web/src/codex-tls-transport.ts with behavior unchanged; the site supplies
  * the engine loader, its session, the relay path and header, and its client label.
@@ -22,8 +23,12 @@ export class CodexTransportError extends Error {
   ) { super(message); this.name = 'CodexTransportError'; this.code = code; this.status = status; }
 }
 
-/** Only these HTTPS operations may receive a browser-held provider credential. */
-export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: 'auth' | 'responses'; method: string } {
+/**
+ * Only these HTTPS operations may receive a browser-held provider credential. TOKEN RULE: the
+ * Grok refresh token (POST https://auth.x.ai/oauth2/token) stays inside browser TLS; the relay
+ * sees ciphertext only.
+ */
+export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: 'auth' | 'responses' | 'xai-auth'; method: string } {
   let url: URL;
   try { url = new URL(input); } catch { throw new CodexTransportError('Unsupported Codex endpoint.'); }
   const method = (init.method ?? 'GET').toUpperCase();
@@ -33,8 +38,9 @@ export function validateCodexRequest(input: string | URL, init: RequestInit = {}
   const response = url.hostname === 'chatgpt.com' && method === 'POST' && url.pathname === '/backend-api/codex/responses' && !url.search;
   const catalog = url.hostname === 'chatgpt.com' && method === 'GET' && url.pathname === '/backend-api/codex/models'
     && /^\?client_version=\d+\.\d+\.\d+$/.test(url.search);
-  if ((!auth && !response && !catalog) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
-  return { url, destination: auth ? 'auth' : 'responses', method };
+  const xai = url.hostname === 'auth.x.ai' && method === 'POST' && url.pathname === '/oauth2/token' && !url.search;
+  if ((!auth && !response && !catalog && !xai) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
+  return { url, destination: xai ? 'xai-auth' : auth ? 'auth' : 'responses', method };
 }
 
 
@@ -136,18 +142,26 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     let headers: Headers;
     try { headers = new Headers(init.headers); } catch { throw new CodexTransportError('Unsupported Codex request header.'); }
     for (const name of headers.keys()) {
-      if (!['authorization', 'content-type', 'accept', 'chatgpt-account-id', 'originator', 'openai-beta'].includes(name)) {
+      const allowed = destination === 'xai-auth'
+        ? ['content-type', 'accept']
+        : ['authorization', 'content-type', 'accept', 'chatgpt-account-id', 'originator', 'openai-beta'];
+      if (!allowed.includes(name)) {
         throw new CodexTransportError('Unsupported Codex request header.');
       }
     }
     headers.set('Host', url.hostname);
     headers.set('Connection', 'close');
     headers.set('Accept-Encoding', 'identity');
-    headers.set('User-Agent', `codex_cli_rs/${CODEX_CLIENT_VERSION} (${options.clientLabel})`);
-    // Keep the upstream Codex protocol identity/version consistent with the account catalog.
-    // User-Agent still identifies this browser implementation (clientLabel).
-    headers.set('Originator', 'codex_cli_rs');
-    headers.set('Version', CODEX_CLIENT_VERSION);
+    if (destination === 'xai-auth') {
+      // Not a Codex request: no Codex protocol identity, only the plain client label.
+      headers.set('User-Agent', options.clientLabel);
+    } else {
+      headers.set('User-Agent', `codex_cli_rs/${CODEX_CLIENT_VERSION} (${options.clientLabel})`);
+      // Keep the upstream Codex protocol identity/version consistent with the account catalog.
+      // User-Agent still identifies this browser implementation (clientLabel).
+      headers.set('Originator', 'codex_cli_rs');
+      headers.set('Version', CODEX_CLIENT_VERSION);
+    }
     if (method === 'POST') headers.set('Content-Length', String(body.length));
     const head = encoder.encode(`${method} ${url.pathname}${url.search} HTTP/1.1\r\n${Array.from(headers, ([k, v]) => `${k}: ${v}\r\n`).join('')}\r\n`);
     if (head.length > 32 * 1024) throw new CodexTransportError('This Codex request is too large.');

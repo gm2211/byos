@@ -138,7 +138,7 @@ For a custom UI or a non-React application, use `core` and provider adapters dir
 
 ## Codex transport bindings
 
-The client and server must agree on relay route and authentication mode. The route is an absolute same-origin path, never an arbitrary host or URL. The browser retains TLS keys and OpenAI credentials. In header mode, the browser also sends the application's own session token to the ticket route; cookie mode sends the same-origin cookie. The relay needs that application session to authorize its one-use ticket, but never receives a readable OpenAI credential. Customize labels and the application session boundary, not upstream destinations, certificate validation, or safety limits.
+The client and server must agree on relay route and authentication mode. The route is an absolute same-origin path, never an arbitrary host or URL. The browser retains TLS keys and OpenAI credentials. In header mode, the browser also sends the application's own session token to the ticket route; cookie mode sends the same-origin cookie. The relay needs that application session to authorize its one-use ticket, but never receives a readable OpenAI credential. Customize labels and the application session boundary, not upstream hosts, certificate validation, or safety limits. The only destination knob is `destinations` on `createCodexRelay`: it defaults to `['auth', 'responses']`, and adding `'xai-auth'` (auth.x.ai:443, tunnel `${basePath}/xai-auth`) lets the browser renew a Grok token with `POST https://auth.x.ai/oauth2/token` inside its own TLS. Hosts stay fixed and ciphertext-only; a disabled destination is refused at the ticket (400) and upgrade (403).
 
 Header-based sessions:
 
