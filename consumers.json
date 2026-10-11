@@ -43,6 +43,8 @@
     "repository": "gm2211/jev-polls",
     "mode": "packages",
     "packages": [
+      "core",
+      "providers",
       "chatgpt-local"
     ],
     "output": "vendor",
