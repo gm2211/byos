@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import type { IncomingMessage } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import test from 'node:test';
 import express from 'express';
+import { WebSocket } from 'ws';
 import { createCodexRelay } from '../dist/codex-relay.js';
 
 const origin = 'https://app.example';
@@ -89,4 +91,83 @@ test('relay basePath rejects external URLs, traversal, separators, and URL suffi
     'https://evil.example/relay', '//evil.example/relay', '/api/../relay', '/api/%2e%2e/relay',
     '/api//relay', '/api/relay?next=evil', '/api/relay#fragment', '/api\\relay', '/',
   ]) assert.throws(() => createCodexRelay(relayOptions({ basePath, sessionHeader: 'X-App-Session' })), /basePath/);
+});
+
+test('default relay serves only auth and responses; xai-auth is rejected for tickets and upgrades', async () => {
+  const relay = createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session' }));
+  const headers = { Origin: origin, 'X-App-Session': 'valid' };
+  const rejected = await requestTicket(ticketHandler(relay), headers, { destination: 'xai-auth' });
+  assert.equal(rejected.statusCode, 400);
+  assert.equal((rejected.body as { error: string }).error, 'A valid Codex destination is required.');
+  assert.equal((await requestTicket(ticketHandler(relay), headers, { destination: 'auth' })).statusCode, 200);
+  const { status } = await upgradeStatus(relay, '/api/relay/xai-auth');
+  assert.equal(status, 403);
+});
+
+type Relay = ReturnType<typeof createCodexRelay>;
+
+async function withServer<T>(relay: Relay, run: (port: number) => Promise<T>): Promise<T> {
+  const server = createServer();
+  relay.handleUpgrade(server);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try { return await run((server.address() as AddressInfo).port); }
+  finally { relay.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+}
+
+async function upgradeStatus(relay: Relay, path: string): Promise<{ status?: number }> {
+  return withServer(relay, port => new Promise(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, { origin });
+    ws.on('unexpected-response', (_req, res) => { res.resume(); resolve({ status: res.statusCode }); });
+    ws.on('open', () => { ws.close(); resolve({}); });
+    ws.on('error', () => undefined);
+  }));
+}
+
+test('relay with the xai-auth destination issues a ticket and dials only auth.x.ai', async () => {
+  const hosts: string[] = [];
+  const relay = createCodexRelay(relayOptions({
+    sessionHeader: 'X-App-Session',
+    destinations: ['auth', 'xai-auth'],
+    lookupAddresses: async host => { hosts.push(host); return [{ address: '8.8.8.8', family: 4 }]; },
+    connect: async host => { hosts.push(`connect:${host}`); throw new Error('synthetic_unreachable'); },
+  }));
+  const headers = { Origin: origin, 'X-App-Session': 'valid' };
+  const granted = await requestTicket(ticketHandler(relay), headers, { destination: 'xai-auth' });
+  assert.equal(granted.statusCode, 200);
+  // The relay still refuses the unlisted 'responses' destination.
+  assert.equal((await requestTicket(ticketHandler(relay), headers, { destination: 'responses' })).statusCode, 400);
+  const { ticket } = granted.body as { ticket: string };
+  await withServer(relay, port => new Promise<void>(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/relay/xai-auth`, { origin });
+    ws.on('open', () => ws.send(JSON.stringify({ ticket, version: 1 })));
+    ws.on('close', () => resolve());
+    ws.on('error', () => undefined);
+  }));
+  assert.deepEqual(hosts, ['auth.x.ai', 'connect:auth.x.ai']);
+});
+
+test('a ticket issued for auth cannot open the xai-auth tunnel', async () => {
+  const hosts: string[] = [];
+  const relay = createCodexRelay(relayOptions({
+    sessionHeader: 'X-App-Session',
+    destinations: ['auth', 'xai-auth'],
+    lookupAddresses: async host => { hosts.push(host); return [{ address: '8.8.8.8', family: 4 }]; },
+    connect: async () => { throw new Error('synthetic_unreachable'); },
+  }));
+  const granted = await requestTicket(ticketHandler(relay), { Origin: origin, 'X-App-Session': 'valid' }, { destination: 'auth' });
+  const { ticket } = granted.body as { ticket: string };
+  await withServer(relay, port => new Promise<void>(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/relay/xai-auth`, { origin });
+    ws.on('open', () => ws.send(JSON.stringify({ ticket, version: 1 })));
+    ws.on('close', () => resolve());
+    ws.on('error', () => undefined);
+  }));
+  assert.deepEqual(hosts, [], 'no DNS lookup or dial for a mismatched ticket');
+});
+
+test('invalid destinations options throw at construction', () => {
+  for (const destinations of [[], ['auth', 'auth'], ['auth', 'evil'], ['auth.x.ai']] as unknown as Array<Array<'auth'>>) {
+    assert.throws(() => createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session', destinations })), /destinations/);
+  }
+  assert.doesNotThrow(() => createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session', destinations: ['xai-auth'] })));
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CODEX_ACCOUNT_CATALOG_URL, CODEX_CLIENT_VERSION } from '@byos/core';
-import { createCodexTlsFetch, type BrowserTlsEngine } from '../dist/transport.js';
+import { createCodexTlsFetch, validateCodexRequest, type BrowserTlsEngine } from '../dist/transport.js';
 
 const endpoint = 'https://chatgpt.com/backend-api/codex/responses';
 const marker = 'synthetic-provider-secret-for-boundary-test';
@@ -39,7 +39,8 @@ class FakeWebSocket {
   onmessage: ((event: { data: unknown }) => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  constructor(_url: string | URL) { lastSocket = this; queueMicrotask(() => this.onopen?.()); }
+  url: string;
+  constructor(url: string | URL) { this.url = String(url); lastSocket = this; queueMicrotask(() => this.onopen?.()); }
   send(value: unknown) {
     wireWrites.push(value);
     if (typeof value === 'string') queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({ ready: true, version: 1 }) }));
@@ -209,4 +210,67 @@ test('account catalog query and TLS compatibility headers share the reviewed ver
   socket.onmessage?.({ data: new TextEncoder().encode(`HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nContent-Type: application/json\r\n\r\n${body}`).buffer });
   const response = await pending;
   assert.deepEqual(await response.json(), JSON.parse(body));
+});
+
+const xaiEndpoint = 'https://auth.x.ai/oauth2/token';
+const xaiBody = `grant_type=refresh_token&refresh_token=${marker}`;
+
+test('xai refresh route validates; every other auth.x.ai shape is rejected before any network use', async t => {
+  assert.equal(validateCodexRequest(xaiEndpoint, { method: 'POST' }).destination, 'xai-auth');
+  for (const [url, init] of [
+    [xaiEndpoint, { method: 'GET' }],
+    [`${xaiEndpoint}?x=1`, { method: 'POST' }],
+    ['https://auth.x.ai/oauth2/authorize', { method: 'POST' }],
+    ['https://auth.x.ai/oauth2/token/', { method: 'POST' }],
+    ['http://auth.x.ai/oauth2/token', { method: 'POST' }],
+    ['https://auth.x.ai:8443/oauth2/token', { method: 'POST' }],
+    ['https://user@auth.x.ai/oauth2/token', { method: 'POST' }],
+    ['https://auth.x.ai/oauth2/token#frag', { method: 'POST' }],
+    ['https://api.x.ai/oauth2/token', { method: 'POST' }],
+    ['https://x.ai/oauth2/token', { method: 'POST' }],
+    ['https://evil.auth.x.ai/oauth2/token', { method: 'POST' }],
+    [xaiEndpoint, { method: 'POST', redirect: 'follow' }],
+  ] as Array<[string, RequestInit]>) {
+    assert.throws(() => validateCodexRequest(url, init), /Unsupported Codex endpoint/, url);
+  }
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  await assert.rejects(transport('https://auth.x.ai/oauth2/authorize', { method: 'POST' }), /Unsupported Codex endpoint/);
+  assert.equal(state.requestCount(), 0);
+});
+
+test('xai-auth only allows content-type and accept headers', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  for (const headers of [
+    { Authorization: `Bearer ${marker}` }, { Originator: 'codex_cli_rs' }, { 'OpenAI-Beta': 'x' }, { 'ChatGPT-Account-Id': 'a' },
+  ]) {
+    await assert.rejects(transport(xaiEndpoint, { method: 'POST', headers, body: xaiBody }), /Unsupported Codex request header/);
+  }
+  assert.equal(state.requestCount(), 0);
+});
+
+test('xai-auth request uses the xai-auth relay route and carries no Codex identity headers', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  const controller = new AbortController();
+  const pending = transport(xaiEndpoint, {
+    method: 'POST', body: xaiBody, signal: controller.signal,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+  });
+  const socket = await opened();
+  assert.deepEqual(JSON.parse(String(state.records[0].init?.body)), { destination: 'xai-auth' });
+  assert.equal(socket.url, 'wss://app.example/api/relay/xai-auth');
+  socket.onmessage?.({ data: new Uint8Array([42]).buffer });
+  await waitForWrites();
+  const clear = plaintextWrites.map(bytes => new TextDecoder().decode(bytes)).join('');
+  assert.ok(clear.startsWith('POST /oauth2/token HTTP/1.1\r\n'));
+  assert.match(clear, /host: auth\.x\.ai\r\n/i);
+  assert.match(clear, /user-agent: Synthetic Test\r\n/i);
+  assert.ok(!/originator|version:|codex_cli_rs/i.test(clear.split('\r\n\r\n')[0]));
+  assert.ok(clear.endsWith(xaiBody));
+  assert.ok(!JSON.stringify(state.records).includes(marker));
+  assert.ok(!wireWrites.some(value => typeof value === 'string' && value.includes(marker)));
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
 });

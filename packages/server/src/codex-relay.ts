@@ -1,8 +1,9 @@
 /**
  * Ciphertext-only relay for browser-owned TLS to OpenAI (Codex subscriptions). The browser runs
  * its own TLS (rustls WASM) to auth.openai.com / chatgpt.com; this relay only moves the encrypted
- * bytes over a WebSocket to those two FIXED hosts. It never terminates TLS, never sees tokens,
- * headers or bodies, and a site cannot pass a host, URL or port.
+ * bytes over a WebSocket to those FIXED hosts. It never terminates TLS, never sees tokens,
+ * headers or bodies, and a site cannot pass a host, URL or port. The hosts are fixed in this
+ * module; `xai-auth` (auth.x.ai, the Grok token refresh) is opt-in via `destinations`.
  *
  * TOKEN RULE: provider credentials never reach the site's server; only ciphertext and connection
  * metadata (destination, peer address, timing, sizes, the site's own session) pass through here.
@@ -17,8 +18,9 @@ import type { IncomingMessage, Server } from 'node:http';
 import express from 'express';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-const HOSTS = { auth: 'auth.openai.com', responses: 'chatgpt.com' } as const;
-type Destination = keyof typeof HOSTS;
+const HOSTS = { auth: 'auth.openai.com', responses: 'chatgpt.com', 'xai-auth': 'auth.x.ai' } as const;
+export type Destination = keyof typeof HOSTS;
+const DEFAULT_DESTINATIONS: readonly Destination[] = ['auth', 'responses'];
 type Ticket = {
   session: string;
   ownerKey: string;
@@ -94,8 +96,8 @@ function rejectUpgrade(socket: import('node:stream').Duplex, status: number, rea
   }
 }
 
-function validDestination(value: unknown): value is Destination {
-  return value === 'auth' || value === 'responses';
+function knownDestination(value: unknown): value is Destination {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(HOSTS, value);
 }
 
 function dialPinned(_host: string, target: { address: string; family: number }, timeoutMs = CONNECT_TIMEOUT_MS): Promise<Socket> {
@@ -133,6 +135,11 @@ export type CodexRelayOptions = {
   /** Route prefix, e.g. `/api/ai/codex-tunnel` (Motive's). Tunnels live at `${basePath}/auth` and
    * `${basePath}/responses`; tickets at `${basePath}/ticket`. */
   basePath: string;
+  /** Destinations this relay serves. Defaults to `['auth', 'responses']` (auth.openai.com:443 and
+   * chatgpt.com:443). `'xai-auth'` is opt-in and maps to auth.x.ai:443, tunnelled at
+   * `${basePath}/xai-auth`; it exists only for the browser-owned Grok token refresh. Hosts stay
+   * fixed and ciphertext-only; a disabled destination gets a 400 ticket and a 403 upgrade. */
+  destinations?: Destination[];
   /** Request header carrying the site's session token on ticket requests. Configure this or
    * `readSession`, but not both. */
   sessionHeader?: string;
@@ -181,7 +188,14 @@ export function createCodexRelay(options: CodexRelayOptions) {
   }
   const messages = { ...DEFAULT_MESSAGES, ...options.messages };
   const base = normalizeBasePath(options.basePath);
-  const PATHS = { auth: `${base}/auth`, responses: `${base}/responses` } as const;
+  const requested = options.destinations ?? [...DEFAULT_DESTINATIONS];
+  if (!Array.isArray(requested) || requested.length === 0 || !requested.every(knownDestination)
+    || new Set(requested).size !== requested.length) {
+    throw new TypeError('destinations must be a non-empty list of unique known destinations.');
+  }
+  const enabledDestinations = new Set<Destination>(requested);
+  const validDestination = (value: unknown): value is Destination => knownDestination(value) && enabledDestinations.has(value);
+  const PATHS = { auth: `${base}/auth`, responses: `${base}/responses`, 'xai-auth': `${base}/xai-auth` } as const;
   const lookupAddresses = options.lookupAddresses ?? (async host => {
     const addresses = await lookup(host, { all: true, verbatim: true });
     if (!addresses.length || addresses.some(({ address }) => !publicAddress(address))) throw new Error('destination_unavailable');
@@ -436,7 +450,8 @@ export function createCodexRelay(options: CodexRelayOptions) {
   function handleUpgrade(server: Server) {
     server.on('upgrade', (req: IncomingMessage, socket, head) => {
       const path = req.url;
-      const destination = path === PATHS.auth ? 'auth' : path === PATHS.responses ? 'responses' : undefined;
+      const matched = path === PATHS.auth ? 'auth' : path === PATHS.responses ? 'responses' : path === PATHS['xai-auth'] ? 'xai-auth' : undefined;
+      const destination = matched && enabledDestinations.has(matched) ? matched : undefined;
       const origin = req.headers.origin;
       if (!accepting || !featureEnabled()) { rejectUpgrade(socket, 503, 'Service Unavailable'); return; }
       if (!destination || typeof origin !== 'string' || !allowedOrigins().has(origin)) { rejectUpgrade(socket, 403, 'Forbidden'); return; }

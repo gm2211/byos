@@ -19,7 +19,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/providers` | Browser provider adapters plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
-| `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes |
+| `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
 | `@byos/server` | Bounded ciphertext relay, provider device-code broker, and identity-only website OIDC helper |
 
@@ -81,7 +81,7 @@ For `@byos/chatgpt-local`, credentials live in the user-owned local process and 
 
 For existing browser adapters, provider credentials live in the browser. For providers whose existing device-code flow uses a disclosed initial exchange, the broker returns the token once and never persists or logs it; later model requests go directly from browser to provider. Manual token import never calls the application's backend.
 
-Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed OpenAI destinations; it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
+Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed destinations (OpenAI, plus `auth.x.ai` only when the site opts into `xai-auth` for the Grok token refresh); it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
 
 Hosted browser code remains within the user's trust boundary: it can read browser-held values and can change after review. Synthetic regression tests verify lifecycle and transport boundaries; they do not establish current provider policy, browser CORS support, or authenticated live model acceptance. Applications retain their own capability gates and live verification.
 
