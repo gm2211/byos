@@ -132,7 +132,7 @@ type PanelProps = {
   state: PaletteState;
   controller: PaletteController;
   strings: PaletteStrings;
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   hasAsk: boolean;
   canOpenFull: boolean;
   renderIcon?: (name: string) => ReactNode;
@@ -153,7 +153,7 @@ function PalettePanel({ state, controller, strings, inputRef, hasAsk, canOpenFul
   return <div className="byos-palette-panel">
     <div className="byos-palette-search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input ref={inputRef} className="byos-palette-input" role="combobox" aria-expanded="true" aria-autocomplete="list"
+      <input ref={inputRef as RefObject<HTMLInputElement>} className="byos-palette-input" role="combobox" aria-expanded="true" aria-autocomplete="list"
         aria-controls={`${id}-list`} aria-label={strings.inputLabel} autoComplete="off" spellCheck={false}
         aria-activedescendant={state.items.length ? `${id}-option-${state.active}` : undefined}
         placeholder={chatting ? strings.followUpPlaceholder : hasAsk ? strings.placeholder : strings.placeholderNoAsk}
