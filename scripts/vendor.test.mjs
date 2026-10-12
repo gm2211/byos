@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { vendor } from './vendor.mjs';
 
@@ -259,4 +259,31 @@ test('CLI runs through a symlinked entry path', async (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /vendored core/);
   assert.match(await readFile(path.join(out, 'REVISION'), 'utf8'), new RegExp(`commit=${fx.ref}`));
+});
+
+test('bundle mode with react carries one React copy, mount helpers, and the package stylesheet', async (t) => {
+  try { await import('esbuild'); } catch { t.skip('esbuild is installed by the root tooling workspace'); return; }
+  const fx = await fixture();
+  t.after(() => rm(fx.root, { recursive: true, force: true }));
+  await fx.addPackage('react', { dependencies: { '@byos/core': 'file:../core' } }, "import { useState } from 'react';\nimport { value } from '@byos/core';\nexport const reactValue = typeof useState === 'function' ? value : 0;\n");
+  await writeFile(path.join(fx.source, 'packages', 'react', 'src', 'styles.css'), '.byos { color: inherit; }\n');
+  for (const args of [['add', '.'], ['commit', '--quiet', '-m', 'react fixture']]) {
+    const result = spawnSync('git', ['-C', fx.source, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  fx.ref = spawnSync('git', ['-C', fx.source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  const settings = options(fx, { mode: 'bundle', packages: ['react'] });
+  const result = await vendor(settings);
+  const bundlePath = path.join(result.outDir, 'byos.js');
+  const mod = await import(`${pathToFileURL(bundlePath).href}?react`);
+  assert.equal(mod.reactValue, 1);
+  assert.equal(typeof mod.createElement, 'function');
+  assert.equal(typeof mod.createRoot, 'function');
+  assert.equal(typeof mod.Fragment, 'symbol');
+  assert.doesNotMatch(await readFile(bundlePath, 'utf8'), /from ['"]react/);
+  assert.equal(await readFile(path.join(result.outDir, 'byos.css'), 'utf8'), '.byos { color: inherit; }\n');
+  assert.match(await readFile(path.join(result.outDir, 'REVISION'), 'utf8'), /packages=core,react/);
+
+  await vendor({ ...settings, packages: ['core'] });
+  await assert.rejects(readFile(path.join(result.outDir, 'byos.css')));
 });

@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "vite": "8.1.5"
+    "vite": "8.1.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   }
 }

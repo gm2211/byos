@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const TOOL = 'byos vendor';
+// React and react-dom come from this tooling clone's locked install, never from the consumer.
+const TOOLING_NODE_MODULES = fileURLToPath(new URL('../node_modules', import.meta.url));
 const DEFAULT_PREFIX = 'byos-';
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 const ENGINE_FILES = [
@@ -195,6 +197,20 @@ async function previousBundleOwnsEngine(revisionPath) {
   }
 }
 
+async function previousBundleOwnsCss(revisionPath) {
+  try {
+    const text = await readFile(revisionPath, 'utf8');
+    const fields = Object.fromEntries(text.split(/\r?\n/).filter(Boolean).map((line) => {
+      const separator = line.indexOf('=');
+      return separator < 0 ? [line, ''] : [line.slice(0, separator), line.slice(separator + 1)];
+    }));
+    return fields.mode === 'bundle' && (fields.packages ?? '').split(',').includes('react');
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'EISDIR') return false;
+    throw error;
+  }
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -263,6 +279,10 @@ async function copyPackage(pkg, stageDir, prefix, all, selected, includeEngine) 
   }
 }
 
+export function bundleCssName(bundleName) {
+  return bundleName.replace(/\.js$/, '.css');
+}
+
 async function bundlePackages(stageDir, sourceRoot, selected, all, bundleName) {
   let esbuild;
   try {
@@ -271,14 +291,18 @@ async function bundlePackages(stageDir, sourceRoot, selected, all, bundleName) {
     fail('bundle mode needs the pinned BYOS esbuild dependency; run npm ci in the BYOS tooling clone first');
   }
   const entries = selected.map((id) => all.get(id));
+  const withReact = selected.includes('react');
   const source = entries.map((pkg) => {
     const index = path.relative(sourceRoot, path.join(pkg.dir, 'src', 'index.ts')).split(path.sep).join('/');
     return `export * from ${JSON.stringify(`./${index}`)};`;
-  }).join('\n');
+  });
+  // A no-build consumer has no React of its own: the bundle carries one copy and exposes what is
+  // needed to mount the components without JSX.
+  if (withReact) source.push("export { createElement, Fragment } from 'react';", "export { createRoot } from 'react-dom/client';");
   const alias = Object.fromEntries([...all.values()].map((pkg) => [pkg.manifest.name, path.join(pkg.dir, 'src', 'index.ts')]));
   await esbuild.build({
     absWorkingDir: sourceRoot,
-    stdin: { contents: source, resolveDir: sourceRoot, sourcefile: 'byos-entry.ts', loader: 'ts' },
+    stdin: { contents: source.join('\n'), resolveDir: sourceRoot, sourcefile: 'byos-entry.ts', loader: 'ts' },
     bundle: true,
     format: 'esm',
     target: 'es2022',
@@ -286,7 +310,15 @@ async function bundlePackages(stageDir, sourceRoot, selected, all, bundleName) {
     alias,
     outfile: path.join(stageDir, bundleName),
     logLevel: 'silent',
+    ...(withReact ? {
+      nodePaths: [TOOLING_NODE_MODULES],
+      jsx: 'automatic',
+      define: { 'process.env.NODE_ENV': '"production"' },
+      minify: true,
+      legalComments: 'none',
+    } : {}),
   });
+  if (withReact) await cp(path.join(all.get('react').dir, 'src', 'styles.css'), path.join(stageDir, bundleCssName(bundleName)));
 }
 
 function revisionText({ commit, mode, selected, prefix, engine, bundleName }) {
@@ -301,7 +333,7 @@ function revisionText({ commit, mode, selected, prefix, engine, bundleName }) {
   ].join('\n');
 }
 
-async function stagedInstall({ stageDir, outDir, revisionPath, revision, mode, all, selected, prefix, bundleName, removeStaleEngine }) {
+async function stagedInstall({ stageDir, outDir, revisionPath, revision, mode, all, selected, prefix, bundleName, removeStaleEngine, removeStaleCss }) {
   const parent = path.dirname(outDir);
   await mkdir(parent, { recursive: true });
   const backup = path.join(parent, `.byos-backup-${process.pid}-${Date.now()}`);
@@ -334,6 +366,17 @@ async function stagedInstall({ stageDir, outDir, revisionPath, revision, mode, a
       for (const id of selected) await move(path.join(stageDir, `${prefix}${id}`), path.join(outDir, `${prefix}${id}`), `${prefix}${id}`);
     } else {
       await move(path.join(stageDir, bundleName), path.join(outDir, bundleName), bundleName);
+      const cssName = bundleCssName(bundleName);
+      if (selected.includes('react')) await move(path.join(stageDir, cssName), path.join(outDir, cssName), cssName);
+      else if (removeStaleCss) {
+        const stale = path.join(outDir, cssName);
+        try {
+          await lstat(stale);
+          const saved = path.join(backup, `${changes.length}-stale-css`);
+          await rename(stale, saved);
+          changes.push({ to: stale, saved, existed: true });
+        } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
       if (revision.engine === 'include') await move(path.join(stageDir, 'engine'), path.join(outDir, 'engine'), 'engine');
       else if (removeStaleEngine) {
         const stale = path.join(outDir, 'engine');
@@ -381,7 +424,11 @@ export async function vendor(options) {
     }
     const generatedTargets = options.mode === 'packages'
       ? selected.map((id) => path.join(outDir, `${options.namePrefix}${id}`))
-      : [path.join(outDir, options.bundleName), ...(options.engine === 'include' ? [path.join(outDir, 'engine')] : [])];
+      : [
+        path.join(outDir, options.bundleName),
+        ...(selected.includes('react') ? [path.join(outDir, bundleCssName(options.bundleName))] : []),
+        ...(options.engine === 'include' ? [path.join(outDir, 'engine')] : []),
+      ];
     const canonicalGeneratedTargets = await Promise.all(generatedTargets.map(canonicalizePath));
     if (canonicalGeneratedTargets.some((target) => within(target, canonicalRevisionPath) || within(canonicalRevisionPath, target))) {
       fail('revision record path cannot overlap a generated package, bundle, or engine directory');
@@ -391,6 +438,8 @@ export async function vendor(options) {
     if (options.engine === 'include') await validateEngine(path.join(all.get('browser-tls').dir, 'engine'));
     const removeStaleEngine = options.mode === 'bundle' && options.engine === 'omit'
       && await previousBundleOwnsEngine(revisionPath);
+    const removeStaleCss = options.mode === 'bundle' && !selected.includes('react')
+      && await previousBundleOwnsCss(revisionPath);
     const parent = path.dirname(outDir);
     await mkdir(parent, { recursive: true });
     const stageDir = path.join(parent, `.byos-stage-${process.pid}-${Date.now()}`);
@@ -415,7 +464,7 @@ export async function vendor(options) {
       await stagedInstall({
         stageDir, outDir, revisionPath,
         revision: { commit, mode: options.mode, engine: options.engine },
-        mode: options.mode, all, selected, prefix: options.namePrefix, bundleName: options.bundleName, removeStaleEngine,
+        mode: options.mode, all, selected, prefix: options.namePrefix, bundleName: options.bundleName, removeStaleEngine, removeStaleCss,
       });
     } finally {
       await rm(stageDir, { recursive: true, force: true });
