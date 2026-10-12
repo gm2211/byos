@@ -10,8 +10,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local",
-    "test": "npm run test -w @byos/core -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local && node --test scripts/*.test.mjs",
+    "build": "npm run build -w @byos/core -w @byos/commands -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local",
+    "test": "npm run test -w @byos/core -w @byos/commands -w @byos/providers -w @byos/browser-tls -w @byos/codex -w @byos/react -w @byos/server -w @byos/chatgpt-local && node --test scripts/*.test.mjs",
     "check": "npm run test && node scripts/verify-engine.mjs && npm run check:example",
     "vendor": "node scripts/vendor.mjs",
     "example": "npm run build -w @byos/core -w @byos/react && vite examples/react --host 127.0.0.1 --port 5184",
