@@ -38,7 +38,7 @@ test('ranker finds the intended command for the comparison queries (initials, ty
   for (const [query, title] of cases) assert.equal(rankCommands(SKIM, query)[0]?.title, title, query);
 });
 
-test('ranker tiers: exact > prefix > word prefix > substring > initials > scattered; no match is -1', () => {
+test('ranker tiers: exact > prefix > word prefix > substring > initials > typo; no match is -1', () => {
   assert.equal(scoreText('Starred', 'starred'), 1000);
   assert.ok(scoreText('Starred', 'star') > scoreText('Show starred', 'star'));
   assert.ok(scoreText('Show starred', 'star') > scoreText('Unstarred', 'star'));
@@ -46,6 +46,10 @@ test('ranker tiers: exact > prefix > word prefix > substring > initials > scatte
   assert.equal(scoreText('Starred', 'xyz'), -1);
   assert.equal(scoreText('Café crème', 'crè'), 600);
   assert.equal(scoreText('Create a saved car search', 'saved cars', false), -1);
+  // A typo keeps its letters close together; letters scattered across a long title do not match.
+  assert.ok(scoreText('Refresh all feeds', 'refrsh') > 0);
+  assert.equal(scoreText('Reviewer conclusion', 'run'), -1);
+  assert.equal(scoreText('An audience panel, a blind reviewer panel', 'new'), -1);
 });
 
 test('scattered letters match titles only, not long keyword or detail text', () => {
