@@ -2,6 +2,7 @@
 
 - This repository owns reusable BYOS behavior. Consumers must not patch vendored package source or generated bundles; change the kit here, then sync a pinned commit.
 - Keep application branding, storage namespaces, session lookup, relay routes, provider selection, and policy gates in consumer bindings. Use existing options, localized strings, headless hooks, and scoped `--byos-*` tokens before adding APIs.
+- `@byos/commands` is the shared command palette. It is application UI, not provider behavior, so keep it free of `@byos/core` imports and credentials; applications own their commands, assistant, and icons.
 - Reusable provider quick-settings layout, connection-state copy, and picker defaults belong to `@byos/react`; consumers bind provider metadata, settings navigation, and reconnect actions through props.
 - Preserve default behavior when extending customization. Validate independent namespaces and custom bindings with synthetic credentials; never include real credentials in commands, output, tests, logs, or commits.
 - Browser adapters retain their existing browser-owned credential boundary. The legacy `@byos/codex` adapter still uses verified browser TLS and the bounded ciphertext relay; never add a plaintext fallback to that transport.

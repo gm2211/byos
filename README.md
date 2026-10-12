@@ -17,13 +17,14 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | --- | --- |
 | `@byos/chatgpt-local` | Official ChatGPT plan sign-in for local Node apps; Keychain and direct HTTPS, no tunnel |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
+| `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
 | `@byos/providers` | Browser provider adapters plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
 | `@byos/server` | Bounded ciphertext relay, provider device-code broker, and identity-only website OIDC helper |
 
-The shared React UI includes identity-only Sign in with ChatGPT, subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
+The shared React UI includes the command palette (`CommandPaletteProvider`), identity-only Sign in with ChatGPT, subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
 
 Run `npm run example` for the synthetic, provider-free React customization playground.
 Each package README documents its API. [Customization recipes](docs/customization.md) cover branding, localization, persistence, provider selection, cookie/header sessions, and updates.
