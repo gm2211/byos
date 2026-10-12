@@ -34,7 +34,8 @@
       "core",
       "providers",
       "codex",
-      "browser-tls"
+      "browser-tls",
+      "react"
     ],
     "output": "src/tracked/app/static/vendor/byos",
     "engine": "include"

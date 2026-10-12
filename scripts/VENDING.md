@@ -44,7 +44,13 @@ node scripts/vendor.mjs \
   --engine include
 ```
 
-The utility writes `byos.js`, optionally `engine/`, and `REVISION` under the output directory. Use
+Selecting `react` in bundle mode is for consumers with no frontend build. The bundle then carries one
+production copy of React and react-dom from this clone's locked tooling install, is minified, and also
+exports `createElement`, `Fragment`, and `createRoot` so the page can mount the components without JSX.
+The utility writes the package stylesheet beside the bundle as `byos.css` (named after `--bundle-name`)
+and removes it again if a later sync drops `react`.
+
+The utility writes `byos.js`, optionally `byos.css` and `engine/`, and `REVISION` under the output directory. Use
 `--bundle-name` to change the generated file name. Both modes accept `--revision <path>` to store the
 revision record elsewhere. The record contains the source commit, selected dependency closure, mode,
 directory prefix or bundle name, and engine choice.
