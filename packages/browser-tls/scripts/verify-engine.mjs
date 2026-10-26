@@ -18,7 +18,7 @@ const manifestFile = new URL('build-manifest.json', base);
 if (args.includes('--write')) {
   const sources = [...sourceFiles.map(file => `packages/browser-tls/rust/${file}`), 'packages/browser-tls/scripts/build-engine.sh'];
   const manifest = {
-    format: 1, llvm: '23.1.0', rustToolchain: '1.94.1', wasmBindgen: '0.2.128', tls: 'TLSv1.3', trust: 'webpki-roots 1.0.9',
+    format: 1, llvm: '23.1.0', rustToolchain: '1.94.1', wasmBindgen: '0.2.128', tls: 'TLSv1.3', trust: 'webpki-roots 1.0.10',
     files: Object.fromEntries([
       ...sources.map(file => [file, hash(new URL(file.replace('packages/browser-tls/', ''), packageRoot))]),
       ...artifactFiles.map(file => [`packages/browser-tls/engine/${file}`, hash(new URL(file, base))]),
