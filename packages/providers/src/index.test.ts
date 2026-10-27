@@ -79,7 +79,7 @@ test('model lists come from the provider', async () => {
   assert.ok(calls.every(call => call.init?.redirect === 'error'));
 });
 
-test('model lists keep the provider order and drop repeats and non-chat models', async () => {
+test('model lists drop repeats and non-chat models', async () => {
   fakeFetch(() => new Response(JSON.stringify({ data: [
     { id: 'grok-4.7', created: 1790000000 },
     { id: 'grok-4.20-0309-reasoning', created: 1773000000 },
@@ -89,7 +89,25 @@ test('model lists keep the provider order and drop repeats and non-chat models',
     { id: 'grok-4.7' },
     { id: 'grok-build-0.1' },
   ] })));
-  assert.deepEqual((await grok().listModels('k')).map(model => model.id), ['grok-4.7', 'grok-4.20-0309-reasoning', 'grok-4.3', 'grok-build-0.1']);
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), ['grok-4.7', 'grok-4.3', 'grok-4.20-0309-reasoning', 'grok-build-0.1']);
+});
+
+test('model lists put the newest flagship first and dated variants below it', async () => {
+  // xAI answers /models alphabetically, which puts the older 4.20 builds above 4.7.
+  fakeFetch(() => new Response(JSON.stringify({ data: [
+    { id: 'grok-4.20-0309-non-reasoning', created: 1773000000 },
+    { id: 'grok-4.20-0309-reasoning', created: 1773000000 },
+    { id: 'grok-4.20-multi-agent-0309', created: 1773000000 },
+    { id: 'grok-4.3', created: 1776000000 },
+    { id: 'grok-4.5', created: 1781000000 },
+    { id: 'grok-4.6', created: 1785000000 },
+    { id: 'grok-4.7-1015', created: 1790000000 },
+    { id: 'grok-4.7', created: 1790000000 },
+  ] })));
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), [
+    'grok-4.7', 'grok-4.7-1015', 'grok-4.6', 'grok-4.5', 'grok-4.3',
+    'grok-4.20-0309-non-reasoning', 'grok-4.20-0309-reasoning', 'grok-4.20-multi-agent-0309',
+  ]);
 });
 
 test('non-chat models are recognized by id words, not substrings', () => {
