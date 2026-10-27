@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import {
   AiPill,
   AiAccountSettings,
+  AiConnectPanel,
+  type AiConnectService,
   AiProviderPicker,
   AiQuickSettingsPanel,
   defaultDeviceCodeStrings,
@@ -70,6 +72,54 @@ function spanishSignInStrings(providerName: string): Partial<DeviceCodeSignInStr
     privacyTab: 'Privacidad',
     helpTab: 'Ayuda',
   };
+}
+
+const connectModels = [{ value: 'sample-small', label: 'Sample Small', meta: 'fast' }, { value: 'sample-balanced', label: 'Sample Balanced', meta: 'general' }];
+
+/** Synthetic AiConnectPanel demo: no provider is ever contacted and no key leaves the page. */
+function ConnectPanelDemo() {
+  const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [deviceStatus, setDeviceStatus] = useState<'idle' | 'pending'>('idle');
+  const [key, setKey] = useState('');
+  const [keyError, setKeyError] = useState('');
+  const [keyConnected, setKeyConnected] = useState(false);
+  const [remember, setRemember] = useState(false);
+  const [model, setModel] = useState('sample-small');
+  const modelSettings = (name: string) => <ModelEffortPicker providerName={name} models={connectModels} model={model} onModelChange={setModel} efforts={[{ value: 'low', label: 'Low' }, { value: 'max', label: 'Max' }]} effort="low" onEffortChange={() => undefined} />;
+  const services: AiConnectService[] = [
+    {
+      provider: { id: 'device', displayName: 'Device AI', signIn: [{ kind: 'device-code', handshakeViaSite: true }, { kind: 'api-key', hint: 'Create a key in your Device AI account settings.' }] },
+      signedIn: false,
+      modelSettings: modelSettings('Device AI'),
+      deviceCode: { status: deviceStatus, device: deviceStatus === 'pending' ? demoDevice : null, onStart: () => setDeviceStatus('pending'), onCancel: () => setDeviceStatus('idle'), linkTarget: '_self', disclosure: 'Placeholder code only. No credentials or provider requests.' },
+      apiKey: { value: '', onChange: () => undefined, onSubmit: () => undefined, caption: 'Your key stays in this browser. Requests go straight to Device AI.' },
+    },
+    {
+      provider: { id: 'key', displayName: 'Key AI', signIn: [{ kind: 'api-key', hint: 'Claim your plan credits, then create a key.', setup: [{ label: 'Claim plan credits', url: 'https://example.com/credits' }, { label: 'Create an API key', url: 'https://example.com/keys' }] }] },
+      badge: 'API key only',
+      signedIn: keyConnected,
+      notice: 'Key AI plans cannot be used in other apps, so connect with an API key.',
+      modelSettings: modelSettings('Key AI'),
+      apiKey: { value: key, onChange: value => { setKey(value); setKeyError(''); }, onSubmit: () => { if (key.startsWith('sk-')) setKeyConnected(true); else setKeyError('Could not verify that key. Demo keys start with sk-.'); }, error: keyError, caption: 'Your key stays in this browser. Requests go straight to Key AI.', placeholder: 'sk-…' },
+      remember: { checked: remember, onChange: setRemember },
+      onSignOut: () => { setKeyConnected(false); setKey(''); },
+    },
+    {
+      provider: { id: 'linked', displayName: 'Linked AI', signIn: [{ kind: 'pkce', handshakeViaSite: false }] },
+      signedIn: true,
+      modelSettings: modelSettings('Linked AI'),
+      pkce: { onStart: () => undefined },
+      remember: { checked: remember, onChange: setRemember },
+      onSignOut: () => setSelectedId(undefined),
+    },
+  ];
+  return <AiConnectPanel
+    services={services}
+    selectedId={selectedId}
+    onSelect={setSelectedId}
+    intro="The app uses your own AI account. Pick a service to sign in."
+    preferences={<p className="byos-note">Application-owned preferences go here.</p>}
+  />;
 }
 
 function App() {
@@ -183,6 +233,14 @@ function App() {
               strings={signInStrings}
               linkTarget="_self"
             />
+          </article>
+
+          <article className="card connect-card" aria-label="Connect panel">
+            <div className="card-top">
+              <p className="card-kicker">AiConnectPanel</p>
+              <span className="sample-badge">Synthetic data only</span>
+            </div>
+            <ConnectPanelDemo />
           </article>
 
           <aside className="card settings-card" aria-labelledby="settings-title">
