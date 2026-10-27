@@ -10,6 +10,7 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   combobox by default; `renderSelect` preserves an application-owned control when needed.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
 - `AiQuickSettingsPanel`: reusable provider heading, settings action, connection notice, and settings body for `AiPill` or standalone use.
+- `AiConnectPanel`: the complete connect surface: provider picker, then Account / Model / Preferences for the picked service, with every sign-in method the provider declares inline in Account.
 - `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
 - `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
 - `SignInWithChatGPT`: localized identity-only website sign-in presentation with approved black/white OpenAI button formats and availability/status slots. The host supplies the start route and its disclosure.
@@ -143,3 +144,49 @@ your bundler (Vite: `resolve.dedupe: ['react', 'react-dom']`).
 ```
 
 Set `AiAccountSettings.keepPanelsMounted` for host-owned sign-in or download workflows that must survive tab changes. Inactive panels use HTML `hidden`, with distinct panel IDs and matching `aria-controls`; default behavior still mounts only the active pane.
+
+
+## AiConnectPanel
+
+`AiConnectPanel` is the native "connect an AI service" surface. Mount it as-is; do not hand-compose a
+picker, method screens, and code screens around the lower-level pieces.
+
+- **Picker view** (no `selectedId`, or after **Change AI service**): `heading` (default "Connect AI"),
+  `intro`, and an `AiProviderPicker` in two columns (one column when the panel is under 380px wide). When a
+  service was already selected a **Back to <name>** button returns to it. Picking calls `onSelect(id)`.
+- **Service view**: `AiAccountSettings` with `keepPanelsMounted`, `signedIn` from the service, `expired`,
+  the third tab labeled **Preferences** (your `preferences` node; omitted means no tab) and
+  `recoveryAction`. Signed out opens on Account; signed in opens on Model.
+- **Account, signed out**: the service's optional `notice`, then each method in `provider.signIn`, in
+  that order, separated by an "or" divider. Methods come only from `provider.signIn`; a declared kind with
+  no controller on the service is not rendered. `device-code` renders a compact `DeviceCodeSignIn`
+  (`deviceCode`), `pkce` a primary button with caption, busy state and error (`pkce`), and `api-key` /
+  `paste-token` a labelled password field with the method's `hint`, the `api-key` `setup` steps as ordered
+  external links, a Connect button (disabled when empty or busy), an error, and a caption. Enter submits.
+- **Account, signed in**: "Connected to <name>", the **Stay signed in on this device** switch (when
+  `remember` is given) and **Sign out of <name>** (when `onSignOut` is given).
+
+```tsx
+<AiConnectPanel
+  services={[{
+    provider: grokProvider,            // { id, displayName, signIn } from your ByosProvider
+    signedIn: grok.connected,
+    deviceCode: { status, device, error, onStart, onCancel },
+    apiKey: { value: draft, onChange: setDraft, onSubmit: saveKey, error: keyError,
+              caption: 'Your key stays in this browser. Requests go straight to xAI.' },
+    remember: { checked: remember, onChange: setRemember },
+    onSignOut: signOut,
+    modelSettings: <ModelEffortPicker {...pickerProps} />,
+  }]}
+  selectedId={providerId}
+  onSelect={setProviderId}
+  intro="Use your own AI account."
+  preferences={<RetrievalSettings />}
+/>
+```
+
+Token rule: the panel never sees or sends a token itself. The host's controllers run each flow
+browser-direct (or through the handshake the provider discloses; see `docs/customization.md`); the panel
+renders their state and reports intent through callbacks. All user-visible English text is in
+`defaultAiConnectPanelStrings` and overridable through `strings`. Controls are at least 44px, keyboard
+operable, and the layout holds at 320px width.

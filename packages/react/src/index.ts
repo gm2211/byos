@@ -10,3 +10,4 @@ export * from './AiProviderPicker.js';
 export * from './hooks.js';
 export * from './SignInWithChatGPT.js';
 export * from './CommandPalette.js';
+export * from './AiConnectPanel.js';

@@ -6,6 +6,7 @@ import { AiPill } from '../dist/AiPill.js';
 import { ModelEffortPicker } from '../dist/ModelEffortPicker.js';
 import { AiQuickSettingsPanel } from '../dist/AiQuickSettingsPanel.js';
 import { AiAccountSettings } from '../dist/AiAccountSettings.js';
+import { AiConnectPanel } from '../dist/AiConnectPanel.js';
 import { AiProviderPicker } from '../dist/AiProviderPicker.js';
 import { DeviceCodeSignIn } from '../dist/DeviceCodeSignIn.js';
 import { SignInWithChatGPT } from '../dist/SignInWithChatGPT.js';
@@ -313,4 +314,73 @@ test('kept settings panes are hidden and each tab controls its own panel', () =>
   assert.equal(panels.length, 3);
   assert.equal(panels.filter(panel => panel[0].includes('hidden=""')).length, 2);
   for (const panel of panels) assert.ok(html.includes(`aria-controls="${panel[1]}"`));
+});
+
+const connectNoop = () => undefined;
+function connectService(overrides: Record<string, unknown> = {}) {
+  return {
+    provider: { id: 'acme', displayName: 'Acme AI', signIn: [
+      { kind: 'device-code', handshakeViaSite: true },
+      { kind: 'api-key', hint: 'Create a key in the console.', setup: [{ label: 'Open the console', url: 'https://example.com/keys' }] },
+      { kind: 'pkce', handshakeViaSite: false },
+    ] },
+    signedIn: false,
+    modelSettings: createElement('p', null, 'Model controls'),
+    deviceCode: { status: 'idle', device: null, onStart: connectNoop, onCancel: connectNoop },
+    apiKey: { value: '', onChange: connectNoop, onSubmit: connectNoop, caption: 'Your key stays in this browser.' },
+    ...overrides,
+  };
+}
+const connectPanel = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(AiConnectPanel, { onSelect: connectNoop, services: [connectService()], ...props } as never));
+
+test('AiConnectPanel shows the heading and a provider picker until a service is selected', () => {
+  const html = connectPanel({ intro: 'Pick one.', services: [connectService(), connectService({ provider: { id: 'beta', displayName: 'Beta', signIn: [] }, badge: 'API key only' })] });
+  assert.match(html, /<h2[^>]*>Connect AI<\/h2>/);
+  assert.match(html, /Pick one\./);
+  assert.match(html, /byos-connect-picker/);
+  assert.match(html, /API key only/);
+  assert.doesNotMatch(html, /role="tablist"/);
+  assert.doesNotMatch(html, /Back to/);
+});
+
+test('AiConnectPanel opens Account first while signed out and renders only declared, controlled methods in provider order', () => {
+  const html = connectPanel({ selectedId: 'acme', preferences: createElement('p', null, 'Prefs') });
+  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]).slice(0, 3), ['Account', 'Model', 'Preferences']);
+  assert.match(html, /aria-selected="true"[^>]*>Account</);
+  assert.ok(html.indexOf("byos-signin") < html.indexOf("byos-connect-key"));
+  assert.match(html, /byos-connect-or/);
+  assert.match(html, /<input[^>]*type="password"/);
+  assert.match(html, /<label[^>]*>API key<\/label>/);
+  assert.match(html, /Create a key in the console\./);
+  assert.match(html, /<a href="https:\/\/example\.com\/keys" target="_blank" rel="noopener noreferrer">Open the console<\/a>/);
+  assert.match(html, /<button type="submit"[^>]*disabled=""[^>]*>Connect<\/button>/);
+  assert.match(html, /Your key stays in this browser\./);
+  // keepPanelsMounted: the Model pane is present but hidden.
+  assert.match(html, /hidden=""[^>]*>[^]*Model controls/);
+});
+
+test('AiConnectPanel never renders a declared method that has no controller', () => {
+  const html = connectPanel({ selectedId: 'acme', services: [connectService({ deviceCode: undefined, apiKey: undefined })] });
+  assert.doesNotMatch(html, /byos-signin|byos-connect-key|byos-connect-or/);
+  const pkce = connectPanel({ selectedId: 'acme', services: [connectService({ deviceCode: undefined, apiKey: undefined, pkce: { onStart: connectNoop, error: 'Popup blocked' } })] });
+  assert.match(pkce, />Sign in with Acme AI<\/button>/);
+  assert.match(pkce, /role="alert">Popup blocked/);
+});
+
+test('AiConnectPanel signed in opens Model and offers the remember switch and sign out in Account', () => {
+  const services = [connectService({ signedIn: true, remember: { checked: true, onChange: connectNoop }, onSignOut: connectNoop })];
+  const html = connectPanel({ selectedId: 'acme', services });
+  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Model', 'Account']);
+  assert.match(html, /aria-selected="true"[^>]*>Model</);
+  assert.match(html, /Connected to Acme AI/);
+  assert.match(html, /role="switch" aria-checked="true"/);
+  assert.match(html, /Stay signed in on this device/);
+  assert.match(html, />Sign out of Acme AI<\/button>/);
+  assert.match(html, /Change AI service/);
+});
+
+test('AiConnectPanel strings are overridable', () => {
+  const html = connectPanel({ strings: { heading: 'Conectar IA', pickerLabel: 'Elige' } });
+  assert.match(html, /Conectar IA/);
+  assert.match(html, /aria-label="Elige"/);
 });
