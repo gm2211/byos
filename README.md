@@ -16,6 +16,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | Package | Purpose |
 | --- | --- |
 | `@byos/chatgpt-local` | Official ChatGPT plan sign-in for local Node apps; Keychain and direct HTTPS, no tunnel |
+| `@byos/claude-local` | Claude Pro/Max subscription sign-in for local Node apps; Keychain, loopback OAuth with a paste-code fallback, direct HTTPS |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
 | `@byos/providers` | Browser provider adapters plus credential-free on-device catalog and native bridge adapters |
@@ -34,6 +35,10 @@ Each package README documents its API. [Customization recipes](docs/customizatio
 `@byos/providers` includes Local (Embedded), On-device (MLX), and Apple Intelligence. These are credential-free execution options, not subscription services. `onDeviceProvidersFor` exposes only providers explicitly supported by a native application binding; browser and hosted-server runtimes receive an empty list. Existing browser provider defaults do not change.
 
 `createOnDeviceProvider` adapts a host's local model discovery, readiness and streaming implementation. BYOS does not bundle llama.cpp, MLX, or Apple's Foundation Models framework. Native apps supply their engine/IPC bridge and perform hardware, OS, model-download and readiness checks. Merely running a web app on a Mac does not grant a native bridge. No hosted inference endpoint or cloud fallback is used. See [native binding recipe](docs/customization.md#on-device-models).
+
+## Use a Claude Pro/Max subscription locally
+
+`@byos/claude-local` signs a user into their Claude subscription (OAuth + PKCE, loopback callback with a paste-code fallback), keeps the tokens in the macOS Keychain and calls `api.anthropic.com` directly. Claude subscription sign-in is supported; see the [package README](packages/claude-local/README.md) for the flow, headers and limits. For an API key instead, use `claude()` from `@byos/providers`.
 
 ## Use ChatGPT without the browser TLS tunnel
 
