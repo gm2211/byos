@@ -74,5 +74,19 @@
     ],
     "output": "vendor/byos",
     "engine": "omit"
+  },
+  "chess-lens": {
+    "repository": "gm2211/chess-lens",
+    "mode": "packages",
+    "packages": [
+      "core",
+      "providers",
+      "chatgpt-local",
+      "claude-local"
+    ],
+    "output": "mac/Sidecar/byos",
+    "namePrefix": "byos-",
+    "revision": "mac/Sidecar/byos/BYOS_REVISION",
+    "engine": "omit"
   }
 }

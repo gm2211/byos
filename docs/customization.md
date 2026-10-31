@@ -12,6 +12,8 @@ The shared React component accepts the host start URL, localized strings, status
 
 ## Local ChatGPT plan connections
 
+`@byos/claude-local` is the Claude Pro/Max equivalent: same Node-only shape (app name, Keychain namespace, browser opener), loopback OAuth on `localhost:54134` with `beginPasteSignIn`/`completePasteSignIn` as the fallback. Vendor it with `--packages claude-local --engine omit`. Pair it with `claude()` from `@byos/providers` only for API keys; the client itself lists models and generates.
+
 `@byos/chatgpt-local` provides a separate Node-only client for official ChatGPT plan usage. Consumer bindings supply the app name, unique Keychain namespace, and browser opener. Keep the client in the local application process and adapt safe status/model/result methods to your UI; never pass its token records through the existing browser `ByosProvider` contract.
 
 See the [package README](../packages/chatgpt-local/README.md) and [local example](../examples/chatgpt-local/server.mjs). The example verifies loopback peer, Host, Origin and CSRF before sign-in, account switching or inference. OAuth uses a separate, one-shot loopback callback with its own state/PKCE validation. Do not weaken normal UI routes to admit OAuth redirects.

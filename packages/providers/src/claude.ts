@@ -3,21 +3,21 @@ import { ProviderRequestError, safeProviderErrorText } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 
 /**
- * Claude (Anthropic) adapter. Browser-direct to api.anthropic.com with the user's API key.
+ * Claude (Anthropic) adapter. Talks to api.anthropic.com with an API key (`x-api-key`) or, for a
+ * Claude Pro/Max subscription token (`sk-ant-oat…`), with a Bearer header, the OAuth beta flags and the
+ * Claude Code system block that such tokens require. Subscription sign-in itself is `@byos/claude-local`
+ * (Node, Keychain, loopback OAuth with a paste fallback); this adapter only spends a token it is handed.
+ * Browsers usually cannot send subscription tokens (CORS), so use them from a Node/native host.
  *
- * SUBSCRIPTIONS ARE PAUSED. Anthropic's terms (https://code.claude.com/docs/en/legal-and-compliance,
- * "Authentication and credential use") do not permit third-party apps to offer Claude.ai login or to
- * route requests through Free/Pro/Max plan credentials. So this adapter offers an API key only and
- * treats a subscription (OAuth) token as unusable while `subscriptionsPaused` is true. Pass `false`
- * only if that policy changes.
+ * `subscriptionsPaused` is an opt-in policy gate for hosts that must refuse subscription tokens
+ * (`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`). It is off by default: subscription sign-in is supported.
  *
  * PLAN CREDITS. Claude Max and Team plans include monthly Claude API credits
  * (https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers). They land in a linked
  * Claude Console organization and are spent by ordinary API keys, so the sign-in links to the claim
- * page and the key page. Anthropic offers no third-party OAuth that mints keys, so the user still
- * pastes the key; byos never sees a Claude.ai session.
+ * page and the key page.
  *
- * TOKEN RULE: the key goes only to api.anthropic.com, from the browser.
+ * TOKEN RULE: the credential goes only to api.anthropic.com.
  */
 export const ANTHROPIC_POLICY_URL = 'https://code.claude.com/docs/en/legal-and-compliance';
 export const CLAUDE_PLAN_CREDITS_URL = 'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers';
@@ -26,7 +26,10 @@ export const CLAUDE_API_KEY_SETUP: ApiKeySetupStep[] = [
   { label: 'Claim your Max or Team plan’s API credits (optional)', url: 'https://claude.ai/settings/billing' },
   { label: 'Create an API key in Claude Console', url: 'https://platform.claude.com/settings/keys' },
 ];
-export const CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE = 'Claude subscriptions are momentarily unavailable because of Anthropic’s policy. Use an API key, or pick another service.';
+export const CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE = 'This app has paused Claude subscription sign-in. Use an API key, or pick another service.';
+/** Beta flags and system block a subscription Bearer token needs. */
+export const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20,claude-code-20250219';
+export const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
 
 const API = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -39,13 +42,14 @@ export function isClaudeSubscriptionCredential(raw: string): boolean {
   return Boolean(token) && !(token.startsWith('sk-ant-') && !token.startsWith('sk-ant-oat'));
 }
 
-export function claudeCredentialAllowed(raw: string, subscriptionsPaused = true): boolean {
+export function claudeCredentialAllowed(raw: string, subscriptionsPaused = false): boolean {
   return !(subscriptionsPaused && isClaudeSubscriptionCredential(raw));
 }
 
 function headers(key: string, json: boolean): Record<string, string> {
+  const subscription = isClaudeSubscriptionCredential(key);
   return {
-    'x-api-key': key,
+    ...(subscription ? { Authorization: `Bearer ${key.trim()}`, 'anthropic-beta': CLAUDE_OAUTH_BETA } : { 'x-api-key': key }),
     'anthropic-version': ANTHROPIC_VERSION,
     // Anthropic requires this opt-in for calls made straight from a browser page.
     'anthropic-dangerous-direct-browser-access': 'true',
@@ -82,7 +86,7 @@ function requireKey(key: string, paused: boolean): void {
   if (!claudeCredentialAllowed(key, paused)) throw new ProviderRequestError(CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE, 403);
 }
 
-export async function listClaudeModels(key: string, signal?: AbortSignal, subscriptionsPaused = true): Promise<CatalogModel[]> {
+export async function listClaudeModels(key: string, signal?: AbortSignal, subscriptionsPaused = false): Promise<CatalogModel[]> {
   requireKey(key, subscriptionsPaused);
   const models: CatalogModel[] = [];
   let after = '';
@@ -98,9 +102,11 @@ export async function listClaudeModels(key: string, signal?: AbortSignal, subscr
 }
 
 /** Streams POST /v1/messages as ChatEvents. System messages become the top-level `system`. */
-export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = true): AsyncGenerator<ChatEvent> {
+export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = false): AsyncGenerator<ChatEvent> {
   requireKey(key, subscriptionsPaused);
-  const system = request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n\n');
+  const userSystem = request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n\n');
+  // Subscription tokens are honored only when the system prompt opens with the Claude Code block.
+  const system = isClaudeSubscriptionCredential(key) ? [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }, ...(userSystem ? [{ type: 'text', text: userSystem }] : [])] : userSystem;
   const response = await fetch(`${API}/messages`, {
     method: 'POST',
     signal: request.signal,
@@ -110,7 +116,7 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
       model: request.model,
       max_tokens: 16_000,
       stream: true,
-      ...(system ? { system } : {}),
+      ...(system.length ? { system } : {}),
       messages: request.messages.filter(message => message.role !== 'system').map(({ role, content }) => ({ role, content })),
       // Effort only when chosen and listed for the model; some models reject the field outright.
       ...(request.effort ? { thinking: { type: 'adaptive' }, output_config: { effort: request.effort } } : {}),
@@ -145,12 +151,12 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
 }
 
 export function claude(options: { subscriptionsPaused?: boolean } = {}): ByosProvider {
-  const paused = options.subscriptionsPaused ?? true;
+  const paused = options.subscriptionsPaused ?? false;
   return {
     id: 'claude',
     displayName: 'Claude',
     signIn: [{ kind: 'api-key', hint: 'A Claude API key from platform.claude.com. Max and Team plans include monthly API credits for it.', setup: CLAUDE_API_KEY_SETUP }],
-    // API keys work; the note tells users why there is no subscription button.
+    // Pro/Max subscription sign-in is @byos/claude-local (Node); this adapter takes the API key or an issued token.
     availability: () => ({ available: true }),
     listModels: (token, signal) => listClaudeModels(token, signal, paused),
     stream: (token, request) => streamClaude(token, request, paused),

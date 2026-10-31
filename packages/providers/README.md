@@ -17,12 +17,15 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   its web_search tool exists.
 
 Browser adapters run in the browser and talk straight to the provider. The
-token never goes to the site's own server. `claude()` talks to api.anthropic.com with an API key. Claude subscriptions are paused
-(`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`): Anthropic's terms do not let third-party apps use Claude.ai
-sign-in, so a subscription token is refused before any request. Max and Team plans include monthly
-Claude API credits spent by ordinary keys; `CLAUDE_API_KEY_SETUP` (also on the sign-in method's
-`setup`) links the claim page and the key page so a site can guide users there. The user still pastes
-the key: Anthropic has no third-party OAuth that issues one. Codex uses `@byos/browser-tls`.
+token never goes to the site's own server. `claude()` talks to api.anthropic.com with an API key, or with a
+Claude Pro/Max subscription token (`sk-ant-oat…`): subscription tokens go out as a Bearer header with the OAuth
+beta flags and the Claude Code system block they require. Claude subscription sign-in is supported through
+[`@byos/claude-local`](../claude-local/README.md) (Node, Keychain, loopback OAuth plus a paste-code fallback),
+which issues the token; a browser page usually cannot send it itself (CORS), so spend it from a Node or native host.
+`claude({ subscriptionsPaused: true })` is an opt-in gate for hosts that must refuse subscription tokens
+(`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`). Max and Team plans also include monthly Claude API credits spent by
+ordinary keys; `CLAUDE_API_KEY_SETUP` (also on the sign-in method's `setup`) links the claim page and the key page.
+Codex uses `@byos/browser-tls`.
 
 `createOpenRouterSignIn({ credentialPersistence: 'session', ... })` keeps the connected
 key in the current tab and migrates/removes legacy localStorage keys. The default

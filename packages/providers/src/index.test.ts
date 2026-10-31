@@ -140,11 +140,11 @@ test('moved helpers keep their behavior', () => {
   assert.deepEqual(parsed.sources, [{ url: 'https://a.example/x', title: 'a.example' }]);
 });
 
-test('Claude: API key only while subscriptions are paused; models and effort come from Anthropic', async () => {
+test('Claude: API keys and subscription tokens; models and effort come from Anthropic; pausing is opt-in', async () => {
   const { claude, claudeCredentialAllowed, CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE } = await import('../dist/index.js');
   assert.equal(claudeCredentialAllowed('sk-ant-api03-x'), true);
-  assert.equal(claudeCredentialAllowed('sk-ant-oat01-x'), false);
-  assert.equal(claudeCredentialAllowed('sk-ant-oat01-x', false), true);
+  assert.equal(claudeCredentialAllowed('sk-ant-oat01-x'), true);
+  assert.equal(claudeCredentialAllowed('sk-ant-oat01-x', true), false);
   assert.deepEqual(claude().signIn.map(method => method.kind), ['api-key']);
   const setup = claude().signIn[0].kind === 'api-key' ? claude().signIn[0].setup ?? [] : [];
   assert.deepEqual(setup.map(step => new URL(step.url).host), ['claude.ai', 'platform.claude.com']);
@@ -155,8 +155,13 @@ test('Claude: API key only while subscriptions are paused; models and effort com
   assert.equal(calls[0].url.startsWith('https://api.anthropic.com/v1/models'), true);
   assert.equal((calls[0].init?.headers as Record<string, string>)['anthropic-dangerous-direct-browser-access'], 'true');
   assert.equal(calls[0].init?.redirect, 'error');
-  await assert.rejects(() => claude().listModels('sk-ant-oat01-x'), (error: Error) => error.message === CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE);
+  await assert.rejects(() => claude({ subscriptionsPaused: true }).listModels('sk-ant-oat01-x'), (error: Error) => error.message === CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE);
   assert.equal(calls.length, 1);
+  await claude().listModels('sk-ant-oat01-x');
+  const h = calls[1].init?.headers as Record<string, string>;
+  assert.equal(h.Authorization, 'Bearer sk-ant-oat01-x');
+  assert.equal(h['x-api-key'], undefined);
+  assert.match(h['anthropic-beta'], /oauth-2025-04-20/);
 });
 
 test('Claude streams text, thinking and usage from the Messages API', async () => {
@@ -177,6 +182,17 @@ test('Claude streams text, thinking and usage from the Messages API', async () =
   assert.equal(body.system, 'be brief');
   assert.deepEqual(body.messages, [{ role: 'user', content: 'hi' }]);
   assert.deepEqual(body.output_config, { effort: 'low' });
+});
+
+test('Claude subscription tokens stream with Bearer, the OAuth beta and the Claude Code system block', async () => {
+  const { claude } = await import('../dist/index.js');
+  const calls = fakeFetch(() => sse(['data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}']));
+  for await (const _ of claude().stream('sk-ant-oat01-x', { model: 'm', messages: [{ role: 'system', content: 'be brief' }, { role: 'user', content: 'hi' }] })) { /* drain */ }
+  const headers = calls[0].init?.headers as Record<string, string>;
+  assert.equal(headers.Authorization, 'Bearer sk-ant-oat01-x');
+  assert.equal(headers['x-api-key'], undefined);
+  const body = JSON.parse(String(calls[0].init?.body));
+  assert.deepEqual(body.system, [{ type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." }, { type: 'text', text: 'be brief' }]);
 });
 
 test('orderServices lists subscriptions first, then OpenRouter, Groq, Hugging Face, and a site order wins', () => {
