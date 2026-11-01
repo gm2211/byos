@@ -1,6 +1,7 @@
 import type { ChatEvent, ChatRequest } from '@byos/core';
 import type { CloudEndpoint } from './endpoints.js';
 import { iterateSseEvents } from './sse.js';
+import { sourcesFromAnnotations } from './xai-responses.js';
 
 /** A provider's refusal, with the HTTP status so callers can tell "sign in again" (401/403) apart
  * from everything else. The message never includes the credential. */
@@ -60,7 +61,7 @@ export function safeProviderErrorText(payload: unknown, credential: string): str
   return text ? redactProviderSecrets(text, [credential]) : undefined;
 }
 
-type ChunkDelta = { content?: unknown; reasoning?: unknown; reasoning_content?: unknown };
+type ChunkDelta = { content?: unknown; reasoning?: unknown; reasoning_content?: unknown; annotations?: unknown };
 type Chunk = {
   choices?: Array<{ delta?: ChunkDelta }>;
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; cost?: unknown };
@@ -72,7 +73,9 @@ const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(
 /**
  * Streams an OpenAI-compatible `POST {baseUrl}/chat/completions` call straight from the browser to
  * the provider, as the kit's common ChatEvent shape. The effort goes out as `reasoning_effort` only
- * when the caller chose one; otherwise the provider applies its own default.
+ * when the caller chose one; otherwise the provider applies its own default. `webSearch` is sent only
+ * where the endpoint has a search mechanism this function speaks (OpenRouter's `web` plugin); its
+ * `url_citation` annotations become `source` events.
  */
 export async function* streamChatCompletions(endpoint: CloudEndpoint, request: ChatRequest): AsyncGenerator<ChatEvent> {
   const response = await fetch(`${endpoint.baseUrl}/chat/completions`, {
@@ -86,12 +89,14 @@ export async function* streamChatCompletions(endpoint: CloudEndpoint, request: C
       stream: true,
       stream_options: { include_usage: true },
       ...(request.effort ? { reasoning_effort: request.effort } : {}),
+      ...(request.webSearch && endpoint.webSearch === 'openrouter-plugin' ? { plugins: [{ id: 'web' }] } : {}),
     }),
   });
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => undefined);
     throw new ProviderRequestError(safeProviderErrorText(payload, endpoint.apiKey) ?? `The provider answered ${response.status}.`, response.status);
   }
+  const seen = new Set<string>();
   const reader = response.body.getReader();
   try {
     for await (const event of iterateSseEvents(reader)) {
@@ -104,6 +109,7 @@ export async function* streamChatCompletions(endpoint: CloudEndpoint, request: C
       const reasoning = delta?.reasoning ?? delta?.reasoning_content;
       if (typeof reasoning === 'string' && reasoning) yield { type: 'reasoning', text: reasoning };
       if (typeof delta?.content === 'string' && delta.content) yield { type: 'text', text: delta.content };
+      for (const source of sourcesFromAnnotations(delta?.annotations, seen)) yield { type: 'source', source };
       if (chunk.usage) {
         yield { type: 'usage', inputTokens: count(chunk.usage.prompt_tokens), outputTokens: count(chunk.usage.completion_tokens), costUsd: count(chunk.usage.cost) };
       }

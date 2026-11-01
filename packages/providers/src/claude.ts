@@ -9,6 +9,7 @@ import {
   type ChatRequest,
   type ReasoningEffort,
   type SignInMethod,
+  type WebSource,
 } from '@byos/core';
 import {
   claudeNeedsRefresh,
@@ -128,6 +129,24 @@ export async function listClaudeModels(key: string, signal?: AbortSignal, subscr
   return models;
 }
 
+/** Anthropic's server-side web search tool version sent when `ChatRequest.webSearch` is set. */
+export const CLAUDE_WEB_SEARCH_TOOL = 'web_search_20250305';
+
+/** `web_search_result` entries and `web_search_result_location` citations as sources; anything else
+ * (an error object, an unknown shape) is skipped, so a format change shows fewer sources, never throws. */
+function claudeWebSources(items: unknown[], seen: Set<string>): WebSource[] {
+  const sources: WebSource[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const { type, url, title } = item as { type?: unknown; url?: unknown; title?: unknown };
+    if (type !== 'web_search_result' && type !== 'web_search_result_location') continue;
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    sources.push({ url, title: typeof title === 'string' && title.trim() ? title.trim() : url });
+  }
+  return sources;
+}
+
 /** Streams POST /v1/messages as ChatEvents. System messages become the top-level `system`. */
 export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = false): AsyncGenerator<ChatEvent> {
   requireKey(key, subscriptionsPaused);
@@ -147,6 +166,8 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
       messages: request.messages.filter(message => message.role !== 'system').map(({ role, content }) => ({ role, content })),
       // Effort only when chosen and listed for the model; some models reject the field outright.
       ...(request.effort ? { thinking: { type: 'adaptive' }, output_config: { effort: request.effort } } : {}),
+      // Anthropic's server-side search tool: Anthropic runs the searches and bills the key or plan.
+      ...(request.webSearch ? { tools: [{ type: CLAUDE_WEB_SEARCH_TOOL, name: 'web_search', max_uses: 5 }] } : {}),
     }),
   });
   if (!response.ok || !response.body) {
@@ -154,17 +175,31 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
     throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude answered ${response.status}.`, response.status);
   }
   let inputTokens: number | undefined;
+  const seen = new Set<string>();
   const reader = response.body.getReader();
   try {
     for await (const event of iterateSseEvents(reader)) {
       if (event.type !== 'data') continue;
-      let data: { type?: string; delta?: { type?: string; text?: unknown; thinking?: unknown }; message?: { usage?: { input_tokens?: unknown } }; usage?: { output_tokens?: unknown }; error?: unknown };
+      let data: {
+        type?: string;
+        delta?: { type?: string; text?: unknown; thinking?: unknown; citation?: unknown };
+        content_block?: { type?: unknown; content?: unknown };
+        message?: { usage?: { input_tokens?: unknown } };
+        usage?: { output_tokens?: unknown };
+        error?: unknown;
+      };
       try { data = JSON.parse(event.data); } catch { continue; }
       if (data.type === 'error') throw new ProviderRequestError(safeProviderErrorText(data, key) ?? 'Claude stopped with an error.', 200);
       if (data.type === 'message_start' && typeof data.message?.usage?.input_tokens === 'number') inputTokens = data.message.usage.input_tokens;
+      // A finished search arrives whole as a web_search_tool_result block (or its error object).
+      if (data.type === 'content_block_start' && data.content_block?.type === 'web_search_tool_result') {
+        const results = data.content_block.content;
+        if (Array.isArray(results)) for (const source of claudeWebSources(results, seen)) yield { type: 'source', source };
+      }
       if (data.type === 'content_block_delta') {
         if (data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') yield { type: 'text', text: data.delta.text };
         if (data.delta?.type === 'thinking_delta' && typeof data.delta.thinking === 'string') yield { type: 'reasoning', text: data.delta.thinking };
+        if (data.delta?.type === 'citations_delta') for (const source of claudeWebSources([data.delta.citation], seen)) yield { type: 'source', source };
       }
       if (data.type === 'message_delta' && typeof data.usage?.output_tokens === 'number') {
         yield { type: 'usage', inputTokens, outputTokens: data.usage.output_tokens };
@@ -245,6 +280,7 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
       ? [{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }, API_KEY_METHOD]
       : [API_KEY_METHOD],
     availability: () => ({ available: true }),
+    webSearch: true,
     listModels: (token, signal) => withRetry(token, signal, key => listClaudeModels(key, signal, paused)),
     async *stream(token, request) {
       const key = await accessToken(token, false, request.signal);

@@ -51,7 +51,7 @@ export function codex(options: CodexProviderOptions): ByosProvider {
   }
 
   async function* stream(token: string, request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const body = buildCodexResponsesBody(request.model, request.messages, request.effort);
+    const body = buildCodexResponsesBody(request.model, request.messages, request.effort, request.webSearch);
     let credential = await refreshed(token, false, request.signal);
     let response = await sendCodexResponses(options.fetch, credential, body, request.signal);
     if (response.status === 401) {
@@ -76,6 +76,7 @@ export function codex(options: CodexProviderOptions): ByosProvider {
     id: 'codex',
     displayName: 'ChatGPT',
     signIn: [{ kind: 'device-code', handshakeViaSite: false }] satisfies SignInMethod[],
+    webSearch: true,
     availability: () => {
       const reason = options.unavailableReason?.();
       return reason ? { available: false, reason } : { available: true };

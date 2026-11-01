@@ -21,6 +21,14 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   `quota` (402/429), `aborted` (`AbortError` or `TimeoutError`) or `unavailable` (anything else). It reads the
   numeric `status` off `ProviderRequestError` or any error that carries one (such as `ClaudeAuthError`).
   `message` is fixed text chosen by `kind`; provider text, which can echo request data, is never returned.
+- Web search: pass `webSearch: true` in a `ChatRequest` to an adapter whose `webSearch` is true and
+  the model may search with the provider's own built-in tool, billed to the user's key or plan:
+  Claude (Anthropic's `web_search` server tool, `CLAUDE_WEB_SEARCH_TOOL`), ChatGPT (`web_search`
+  Responses tool), Grok (one non-streaming `/responses` call, `streamXaiWebSearch`) and OpenRouter
+  (the `web` plugin). Each page the provider reports reading or citing arrives once as a
+  `{ type: 'source', source: { url, title } }` event. Groq and Hugging Face have no search tool,
+  leave `webSearch` unset and ignore the flag. Covered by synthetic tests only: live searches on each
+  provider are unverified, and Anthropic API organisations can switch the tool off in their console.
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
   its web_search tool exists.
 

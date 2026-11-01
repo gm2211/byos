@@ -250,3 +250,88 @@ test('classifyProviderError sorts failures and never returns provider text', () 
   assert.equal(kind(undefined), 'unavailable');
   for (const e of [new ProviderRequestError(secret, 401), new ProviderRequestError(secret, 429), new Error(secret)]) assert.ok(!classifyProviderError(e).message.includes(secret));
 });
+
+test('web search: adapters say whether they search; Groq and Hugging Face do not', async () => {
+  const { claude, huggingface } = await import('../dist/index.js');
+  assert.equal(claude().webSearch, true);
+  assert.equal(openrouter().webSearch, true);
+  assert.equal(grok().webSearch, true);
+  assert.equal(groq().webSearch, undefined);
+  assert.equal(huggingface().webSearch, undefined);
+});
+
+test('Claude web search sends Anthropic\'s search tool and yields each result and citation once', async () => {
+  const { claude, CLAUDE_WEB_SEARCH_TOOL } = await import('../dist/index.js');
+  const calls = fakeFetch(() => sse([
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"t1","name":"web_search","input":{}}}',
+    'data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"t1","content":[{"type":"web_search_result","url":"https://track.example/day","title":"Track day"},{"type":"web_search_result","url":"javascript:bad","title":"bad"},{"type":"web_search_result","url":"https://club.example/","title":""}]}}',
+    'data: {"type":"content_block_delta","index":2,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","url":"https://track.example/day","title":"Track day","cited_text":"x"}}}',
+    'data: {"type":"content_block_delta","index":2,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","url":"https://new.example/","title":"New"}}}',
+    'data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"Found"}}',
+  ]));
+  const events = [];
+  for await (const event of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(event);
+  assert.deepEqual(events, [
+    { type: 'source', source: { url: 'https://track.example/day', title: 'Track day' } },
+    { type: 'source', source: { url: 'https://club.example/', title: 'https://club.example/' } },
+    { type: 'source', source: { url: 'https://new.example/', title: 'New' } },
+    { type: 'text', text: 'Found' },
+    { type: 'done' },
+  ]);
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)).tools, [{ type: CLAUDE_WEB_SEARCH_TOOL, name: 'web_search', max_uses: 5 }]);
+  fakeFetch(() => sse([]));
+  for await (const _ of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+});
+
+test('Claude without webSearch sends no tools', async () => {
+  const { claude } = await import('../dist/index.js');
+  const calls = fakeFetch(() => sse([]));
+  for await (const _ of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+  assert.equal(JSON.parse(String(calls[0].init?.body)).tools, undefined);
+});
+
+test('OpenRouter web search uses the web plugin and yields url_citation annotations; Groq ignores the flag', async () => {
+  const calls = fakeFetch(() => sse([
+    'data: {"choices":[{"delta":{"content":"See","annotations":[{"type":"url_citation","url_citation":{"url":"https://track.example/day","title":"Track day"}}]}}]}',
+    'data: {"choices":[{"delta":{"annotations":[{"type":"url_citation","url_citation":{"url":"https://track.example/day","title":"again"}}]}}]}',
+    'data: [DONE]',
+  ]));
+  const events = [];
+  for await (const event of openrouter().stream('k', { model: 'm', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(event);
+  assert.deepEqual(events, [
+    { type: 'text', text: 'See' },
+    { type: 'source', source: { url: 'https://track.example/day', title: 'Track day' } },
+    { type: 'done' },
+  ]);
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)).plugins, [{ id: 'web' }]);
+  for await (const _ of groq().stream('k', { model: 'm', messages: [{ role: 'user', content: 'find' }], webSearch: true })) { /* drain */ }
+  assert.equal(JSON.parse(String(calls[1].init?.body)).plugins, undefined);
+});
+
+test('Grok web search goes through /responses with the web_search tool; plain chat stays on chat/completions', async () => {
+  const calls = fakeFetch(call => call.url.endsWith('/responses')
+    ? new Response(JSON.stringify({ output: [{ type: 'web_search_call' }, { type: 'message', content: [{ type: 'output_text', text: 'Answer', annotations: [{ type: 'url_citation', url: 'https://track.example/day', title: '1' }] }] }], usage: { input_tokens: 5, output_tokens: 2 } }))
+    : sse(['data: [DONE]']));
+  const events = [];
+  for await (const event of grok().stream('xai-key', { model: 'grok-4', messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'find' }], webSearch: true })) events.push(event);
+  assert.deepEqual(events, [
+    { type: 'source', source: { url: 'https://track.example/day', title: 'track.example' } },
+    { type: 'text', text: 'Answer' },
+    { type: 'usage', inputTokens: 5, outputTokens: 2 },
+    { type: 'done' },
+  ]);
+  assert.equal(calls[0].url, 'https://api.x.ai/v1/responses');
+  const body = JSON.parse(String(calls[0].init?.body));
+  assert.deepEqual(body.tools, [{ type: 'web_search' }]);
+  assert.equal(body.instructions, 'sys');
+  assert.deepEqual(body.input, [{ role: 'user', content: 'find' }]);
+  for await (const _ of grok().stream('xai-key', { model: 'grok-4', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+  assert.equal(calls[1].url, 'https://api.x.ai/v1/chat/completions');
+});
+
+test('Grok web search reports a refusal with its status and redacts the key', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ error: 'bad key xai-secret' }), { status: 401 }));
+  await assert.rejects(async () => {
+    for await (const _ of grok().stream('xai-secret', { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) { /* drain */ }
+  }, (error: Error & { status?: number }) => error.message === 'bad key [redacted]' && error.status === 401);
+});
