@@ -11,3 +11,4 @@ export { createHuggingFaceSignIn } from './huggingface-sign-in.js';
 export * from './order.js';
 export * from './on-device.js';
 export * from './claude-sign-in.js';
+export * from './grok-sign-in.js';

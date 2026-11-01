@@ -1,6 +1,13 @@
 import type { ByosProvider, CatalogModel, SignInMethod } from '@byos/core';
 import { listModelsForEndpoint, listOpenRouterModels } from './catalog.js';
-import { streamChatCompletions } from './chat.js';
+import { ProviderRequestError, streamChatCompletions } from './chat.js';
+import {
+  createGrokSubscription,
+  decodeGrokCredential,
+  GrokReconnectRequiredError,
+  isGrokSubscriptionRecord,
+  type GrokSubscriptionOptions,
+} from './grok-sign-in.js';
 import { endpointFor, type EndpointOptions } from './endpoints.js';
 
 /**
@@ -23,7 +30,46 @@ export function openrouter(options: EndpointOptions = {}): ByosProvider {
   };
 }
 
-export function grok(options: { deviceCodeViaSite?: boolean } = {}): ByosProvider {
+export type GrokProviderOptions = {
+  deviceCodeViaSite?: boolean;
+  /**
+   * Keeps a Grok subscription sign-in alive: refreshes the encoded `grok-subscription:` credential
+   * near expiry (single-flight, cross-tab) and once more after a 401. Without it a record token is
+   * used until it expires, then the user must reconnect. API keys are never refreshed.
+   */
+  subscription?: GrokSubscriptionOptions;
+};
+
+/**
+ * Grok (xAI). TOKEN RULE: only the access token is ever sent to api.x.ai, never the encoded
+ * `grok-subscription:` record. A refresh grant goes browser -> auth.x.ai inside browser TLS (the
+ * ciphertext `xai-auth` relay destination), or directly from Node/native; never a plaintext relay.
+ * 403 is not retried: some SuperGrok tiers answer 403 while signed in.
+ */
+export function grok(options: GrokProviderOptions = {}): ByosProvider {
+  const subscription = options.subscription && createGrokSubscription(options.subscription);
+
+  /** The string to send as the key. */
+  async function accessToken(token: string, force: boolean, signal?: AbortSignal): Promise<string> {
+    if (subscription) return subscription.accessToken(token, { force, signal });
+    if (!isGrokSubscriptionRecord(token)) return token;
+    const current = decodeGrokCredential(token);
+    if (!current || force || current.expiresAt <= Date.now()) throw new GrokReconnectRequiredError();
+    return current.accessToken;
+  }
+
+  const retryable = (error: unknown, token: string) =>
+    error instanceof ProviderRequestError && error.status === 401 && isGrokSubscriptionRecord(token);
+
+  async function withRetry<T>(token: string, signal: AbortSignal | undefined, run: (key: string) => Promise<T>): Promise<T> {
+    const key = await accessToken(token, false, signal);
+    try { return await run(key); }
+    catch (error) {
+      if (!retryable(error, token)) throw error;
+      return run(await accessToken(options.subscription?.readCredential() || token, true, signal));
+    }
+  }
+
   return {
     id: 'xai',
     displayName: 'Grok',
@@ -33,8 +79,19 @@ export function grok(options: { deviceCodeViaSite?: boolean } = {}): ByosProvide
       { kind: 'api-key', hint: 'An xAI API key from console.x.ai' },
     ],
     availability: () => ({ available: true }),
-    listModels: async (token, signal) => toCatalog(await listModelsForEndpoint(endpointFor('xai', token), signal)),
-    stream: (token, request) => streamChatCompletions(endpointFor('xai', token), request),
+    listModels: (token, signal) => withRetry(token, signal, async key => toCatalog(await listModelsForEndpoint(endpointFor('xai', key), signal))),
+    async *stream(token, request) {
+      const key = await accessToken(token, false, request.signal);
+      let started = false;
+      try {
+        for await (const event of streamChatCompletions(endpointFor('xai', key), request)) { started = true; yield event; }
+        return;
+      } catch (error) {
+        if (started || !retryable(error, token)) throw error;
+      }
+      const retryKey = await accessToken(options.subscription?.readCredential() || token, true, request.signal);
+      yield* streamChatCompletions(endpointFor('xai', retryKey), request);
+    },
   };
 }
 

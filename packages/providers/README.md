@@ -44,6 +44,33 @@ and once more after a 401.
   The exchange and each refresh therefore pass through the host's relay, which neither stores nor logs them.
 - A live sign-in against Anthropic's paste-code redirect is unverified.
 
+### Grok subscription refresh
+
+`grok({ subscription: { tokenFetch, readCredential, saveCredential, namespace? } })` keeps a Grok
+(SuperGrok) sign-in alive past its first hour. The stored value is the encoded `grok-subscription:`
+credential (base64url JSON: access token, refresh token, optional id token, expiry, label); the
+adapter refreshes it within 5 minutes of expiry (single-flight, cross-tab via a Web Lock) and once more
+after a 401 on `listModels` or before the first stream event. It never retries a 403, because some
+SuperGrok tiers answer 403 while signed in. Only the access token goes to `api.x.ai`; the encoded
+record never does. Without `subscription`, a record is used until it expires, then `GrokReconnectRequiredError`.
+API keys are passed through and never refreshed. `signIn` is unchanged.
+
+- `tokenFetch` is always called with `XAI_TOKEN_URL` and a form body with exactly the two
+  `XAI_FORM_HEADERS`. In a browser pass `createCodexTlsFetch(...)` from `@byos/browser-tls` (the codex
+  relay must enable the ciphertext `xai-auth` destination); in Node or native pass `globalThis.fetch`.
+  A Grok refresh grant never goes through a plaintext host relay.
+- `grokCredentialFromDeviceTokens({ accessToken, refreshToken?, idToken?, expiresIn? })` turns the
+  device-code broker's result into the encoded credential to store. Storing only the access token
+  signs the user out after about an hour.
+- `grokVaultBinding(vault, slot)` gives `{ readCredential, saveCredential }` over a `createCredentialVault`
+  that keeps the access token and refresh grant in separate slots; a legacy pair reads as a record that
+  refreshes on first use (`grokCredentialFromLegacy`).
+- `createGrokSubscription(options).accessToken(token, { force?, signal? })`, `refreshGrokCredential`,
+  `encodeGrokCredential` / `decodeGrokCredential`, `isGrokSubscriptionRecord`, `grokNeedsRefresh`.
+  Errors are `GrokReconnectRequiredError` (status 401; a 400/401 from auth.x.ai) and `GrokAuthError`
+  (status 502; any other failure, with fixed text). A transient failure keeps using a still-valid access token.
+- Live xAI behavior is unverified, and whether xAI rotates refresh tokens is unconfirmed, hence the single flight.
+
 `claude({ subscriptionsPaused: true })` is an opt-in gate for hosts that must refuse subscription tokens
 (`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`). Max and Team plans also include monthly Claude API credits spent by
 ordinary keys; `CLAUDE_API_KEY_SETUP` (also on the sign-in method's `setup`) links the claim page and the key page.
