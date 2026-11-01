@@ -1,6 +1,6 @@
 /**
  * Fixed-destination relay for Anthropic's OAuth token endpoint (Claude Pro/Max subscriptions).
- * console.anthropic.com/v1/oauth/token refuses browser origins (CORS), while api.anthropic.com accepts
+ * platform.claude.com/v1/oauth/token refuses browser origins (CORS), while api.anthropic.com accepts
  * Bearer calls from pages. So a browser app cannot run the authorization-code exchange or a refresh
  * grant itself; this relay forwards exactly those two grant shapes and nothing else.
  *

@@ -56,7 +56,7 @@ const credential = (overrides: Record<string, unknown> = {}) => encodeClaudeCred
 test('beginClaudeSignIn builds the claude.ai URL with S256 PKCE and a fresh attempt', async () => {
   const { url, attempt } = await beginClaudeSignIn(1_000);
   const parsed = new URL(url);
-  assert.equal(parsed.origin + parsed.pathname, 'https://claude.ai/oauth/authorize');
+  assert.equal(parsed.origin + parsed.pathname, 'https://claude.com/cai/oauth/authorize');
   assert.equal(parsed.searchParams.get('redirect_uri'), CLAUDE_PASTE_REDIRECT_URI);
   assert.equal(parsed.searchParams.get('state'), attempt.state);
   assert.equal(parsed.searchParams.get('code_challenge_method'), 'S256');

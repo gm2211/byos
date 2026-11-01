@@ -126,13 +126,13 @@ test('refresh window matches the providers', () => {
 test('Claude OAuth helpers: authorize URL, pasted code, token bodies and the strict request allowlist', async () => {
   const core = await import('../dist/index.js');
   const url = new URL(core.claudeAuthorizeUrl({ challenge: 'c'.repeat(43), state: 's'.repeat(43), redirectUri: core.CLAUDE_PASTE_REDIRECT_URI }));
-  assert.equal(`${url.origin}${url.pathname}`, 'https://claude.ai/oauth/authorize');
+  assert.equal(`${url.origin}${url.pathname}`, 'https://claude.com/cai/oauth/authorize');
   assert.equal(url.searchParams.get('code'), 'true');
   assert.equal(url.searchParams.get('client_id'), core.CLAUDE_OAUTH_CLIENT_ID);
   assert.equal(url.searchParams.get('response_type'), 'code');
   assert.equal(url.searchParams.get('scope'), 'user:profile user:inference');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
-  assert.equal(url.searchParams.get('redirect_uri'), 'https://console.anthropic.com/oauth/code/callback');
+  assert.equal(url.searchParams.get('redirect_uri'), 'https://platform.claude.com/oauth/code/callback');
 
   assert.equal(core.parseClaudePastedCode(' abc#STATE ', 'STATE'), 'abc');
   assert.equal(core.parseClaudePastedCode('abc', 'STATE'), 'abc');

@@ -52,7 +52,7 @@ test('loopback sign-in: localhost redirect, PKCE, scopes, token exchange, accoun
   const status = await client.signIn();
   assert.deepEqual(status, { connected: true, account: { label: 'me@example.test' } });
   const a = auth();
-  assert.equal(a.origin + a.pathname, 'https://claude.ai/oauth/authorize');
+  assert.equal(a.origin + a.pathname, 'https://claude.com/cai/oauth/authorize');
   assert.equal(a.searchParams.get('client_id'), CLIENT_ID);
   assert.equal(a.searchParams.get('scope'), 'user:profile user:inference');
   assert.equal(a.searchParams.get('code_challenge_method'), 'S256');
@@ -83,7 +83,7 @@ test('a busy loopback port reports port-in-use', async t => {
 test('paste sign-in accepts CODE#STATE and a bare code, rejects a wrong state', async t => {
   const { client, c } = await fixture(t);
   const { url } = client.beginPasteSignIn(); const u = new URL(url);
-  assert.equal(u.searchParams.get('redirect_uri'), 'https://console.anthropic.com/oauth/code/callback');
+  assert.equal(u.searchParams.get('redirect_uri'), 'https://platform.claude.com/oauth/code/callback');
   await assert.rejects(client.completePasteSignIn('abc#other'), (e: ClaudeError) => e.code === 'auth-failed');
   assert.equal(c.tokenBodies.length, 0);
   assert.equal((await client.completePasteSignIn(`abc#${u.searchParams.get('state')}`)).connected, true);

@@ -26,6 +26,8 @@ Use package-mode full-SHA vendoring with `--packages chatgpt-local --engine omit
 
 ## Claude subscription in a browser app
 
+The OAuth endpoints (authorize `https://claude.com/cai/oauth/authorize`, paste redirect `https://platform.claude.com/oauth/code/callback`, token `https://platform.claude.com/v1/oauth/token`) come from the Claude Code CLI's embedded strings (checked against CLI 2.1.316), are undocumented and can change. Re-check with `strings $(readlink -f $(which claude)) | grep oauth`.
+
 `claude()` is API-key-only until the host passes `subscription`. With it, the provider declares `{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }` before the API-key method, and refreshes the credential (single-flight, cross-tab) near expiry and once after a 401.
 
 ```ts
