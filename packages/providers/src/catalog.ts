@@ -104,21 +104,45 @@ export function isChatModel(id: string): boolean {
   return !id.toLowerCase().split(/[^a-z0-9]+/).some(word => NON_CHAT_MODEL_WORDS.has(word));
 }
 
-/** A dated or variant build of a model, such as xAI's `grok-4.20-0309-reasoning` or
- * `grok-4.20-multi-agent-0309`: a 4-or-more digit segment (MMDD or YYYYMMDD) in the id. */
+/** A dated build of a model, such as xAI's `grok-4.20-0309-reasoning`: a 4-or-more digit segment (MMDD or YYYYMMDD) in the id. */
 const DATED_SEGMENT = /(?:^|-)\d{4,8}(?:-|$)/;
 
+/** True for a dated build, or one with a plain-word qualifier after the version (`-reasoning`,
+ * `-non-reasoning`, `-multi-agent`, `-mini`), as opposed to the undated flagship alias. */
+function isVariantId(id: string): boolean {
+  if (DATED_SEGMENT.test(id)) return true;
+  const parts = id.toLowerCase().split('-');
+  const firstVersion = parts.findIndex(part => /\d/.test(part));
+  return firstVersion !== -1 && parts.slice(firstVersion + 1).some(part => /^[a-z]+$/.test(part));
+}
+
+/** The numeric version segments of an id, ignoring date segments: `grok-4.20-0309-reasoning` is [4, 20]. */
+function versionOf(id: string): number[] {
+  return id.split('-').filter(part => !/^\d{4,8}$/.test(part)).flatMap(part => part.match(/\d+/g) ?? []).map(Number);
+}
+
+/** Positive when version `a` is older than `b`, comparing segment by segment (4.3 < 4.20 < 5). */
+function compareVersionsDescending(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (b[i] ?? -1) - (a[i] ?? -1);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 /**
- * Orders an OpenAI-compatible `/models` list newest first, by each entry's `created` timestamp
- * (xAI lists ids alphabetically, so `grok-4.20-0309-*` would otherwise sit above `grok-4.7`, and
- * version numbers cannot settle it: xAI's 4.20 predates 4.3). On a tie the undated alias comes
- * before its dated variants. Entries without a `created` value go last, in the provider's order.
+ * Orders an OpenAI-compatible `/models` list newest first. The primary key is each entry's `created`
+ * timestamp (xAI lists ids alphabetically, so `grok-4.20-0309-*` would otherwise sit above `grok-4.7`).
+ * When `created` is missing or tied, undated builds come before dated or variant ones (isVariantId),
+ * and within each group the higher version comes first (versionOf). The undated/dated split must
+ * come before the version compare because xAI's 4.20 predates 4.3. Entries without a `created` value
+ * sort after those with one; remaining ties keep the provider's order.
  */
 function newestFirst<T extends { id: string; created?: unknown }>(models: T[]): T[] {
   const createdAt = (model: T) => typeof model.created === 'number' && Number.isFinite(model.created) ? model.created : -Infinity;
   return models
-    .map((model, index) => ({ model, index, created: createdAt(model), dated: DATED_SEGMENT.test(model.id) ? 1 : 0 }))
-    .sort((a, b) => (a.created === b.created ? 0 : b.created > a.created ? 1 : -1) || a.dated - b.dated || a.index - b.index)
+    .map((model, index) => ({ model, index, created: createdAt(model), variant: isVariantId(model.id) ? 1 : 0, version: versionOf(model.id) }))
+    .sort((a, b) => (a.created === b.created ? 0 : b.created > a.created ? 1 : -1) || a.variant - b.variant || compareVersionsDescending(a.version, b.version) || a.index - b.index)
     .map(entry => entry.model);
 }
 

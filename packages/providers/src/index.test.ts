@@ -110,6 +110,20 @@ test('model lists put the newest flagship first and dated variants below it', as
   ]);
 });
 
+const GROK_IDS = ['grok-4.20-0309-non-reasoning', 'grok-4.20-0309-reasoning', 'grok-4.20-multi-agent-0309', 'grok-4.3', 'grok-4.5', 'grok-4.6', 'grok-4.7'];
+const GROK_NEWEST_FIRST = ['grok-4.7', 'grok-4.6', 'grok-4.5', 'grok-4.3', 'grok-4.20-0309-non-reasoning', 'grok-4.20-0309-reasoning', 'grok-4.20-multi-agent-0309'];
+
+test('model lists without created put undated builds first, newest version first, then dated variants', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ data: GROK_IDS.map(id => ({ id })) })));
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), GROK_NEWEST_FIRST);
+});
+
+test('model lists with created timestamps give the same order', async () => {
+  const created: Record<string, number> = { 'grok-4.3': 1776000000, 'grok-4.5': 1781000000, 'grok-4.6': 1785000000, 'grok-4.7': 1790000000 };
+  fakeFetch(() => new Response(JSON.stringify({ data: GROK_IDS.map(id => ({ id, created: created[id] ?? 1773000000 })) })));
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), GROK_NEWEST_FIRST);
+});
+
 test('non-chat models are recognized by id words, not substrings', () => {
   for (const id of ['grok-4.7', 'grok-build-0.1', 'llama-3.2-11b-vision-instruct', 'gpt-5', 'qwen3-32b']) assert.equal(isChatModel(id), true, id);
   for (const id of ['grok-imagine-image', 'grok-imagine-video-1.5', 'dall-e-3', 'gpt-image-1', 'text-embedding-3-small', 'whisper-large-v3', 'playai-tts', 'omni-moderation-latest']) assert.equal(isChatModel(id), false, id);
@@ -200,5 +214,5 @@ test('orderServices lists subscriptions first, then OpenRouter, Groq, Hugging Fa
   const keyOf = (id: string) => (id === 'other' ? undefined : id as ServiceKey);
   assert.deepEqual(orderServices(ids, keyOf), ['claude', 'chatgpt', 'grok', 'openrouter', 'groq', 'huggingface', 'other']);
   assert.deepEqual(orderServices(ids, keyOf, ['openrouter', 'grok']), ['openrouter', 'grok', 'huggingface', 'other', 'groq', 'chatgpt', 'claude']);
-  assert.ok(NOT_RECOMMENDED_REASON.claude);
+  assert.equal(NOT_RECOMMENDED_REASON.claude, undefined);
 });
