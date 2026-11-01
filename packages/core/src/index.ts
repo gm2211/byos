@@ -6,3 +6,4 @@ export * from './provider.js';
 export * from './codex-client.js';
 export * from './claude-oauth.js';
 export * from './refresh-lock.js';
+export * from './xai-oauth.js';

@@ -9,6 +9,13 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   against what the provider says the model supports.
 - `createModelCatalogCache({ prefix })` and `pickerModels`: the provider's last live model list,
   and the rule that a stale list never drops the user's own selection.
+- xAI (Grok subscription) OAuth, pure and browser-safe: the public Grok CLI client's constants
+  (`XAI_OAUTH_CLIENT_ID`, `XAI_DEVICE_CODE_URL`, `XAI_TOKEN_URL`, `XAI_OAUTH_SCOPE`, refresh window and
+  device-flow timing), the exact form requests (`xaiTokenRequestFields`, `xaiFormBody`, `xaiTokenUrl`,
+  `XAI_FORM_HEADERS`) and strict parsers (`parseXaiTokenResponse`, `parseXaiDeviceStart`,
+  `classifyXaiPollError`, `classifyXaiRefreshFailure`). `conformance/xai-oauth.json` holds synthetic
+  vectors that other implementations (Swift, Rust, Python) can check themselves against. Live xAI
+  behavior is unverified; the endpoints are undocumented and can change.
 - `ByosProvider` types: the contract each provider adapter implements.
 
 ## Token rule

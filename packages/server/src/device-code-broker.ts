@@ -12,6 +12,8 @@
  * loses nothing. The broker keeps only a best-effort in-memory throttle so polls respect the
  * provider's interval. Send the id in a request header or body, never in a URL, because URLs end
  * up in access logs.
+ *
+ * For xAI (Grok) pass `createDeviceCodeBroker({ ...XAI_DEVICE_CODE_CONFIG })` from @byos/core.
  */
 import { createHash } from 'node:crypto';
 
