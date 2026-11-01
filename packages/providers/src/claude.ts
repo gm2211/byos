@@ -261,3 +261,21 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
     },
   };
 }
+
+/** Claude Opus/Sonnet 4.7 and later, and every 5-series model, answer a `temperature` field with a 400.
+ *  True only for Claude 3.x and 4.0-4.6; an unrecognised model gets the API's default sampling instead of
+ *  a failure. Ported from skim's `anthropic_accepts_temperature`. */
+export function claudeAcceptsTemperature(model: string): boolean {
+  const parts = model.toLowerCase().split('-');
+  if (parts.shift() !== 'claude') return false;
+  // "claude-3-5-sonnet-…" names the version first; "claude-sonnet-4-6" the family first.
+  if (parts[0] !== undefined && !/^\d+$/.test(parts[0])) parts.shift();
+  if (!/^\d+$/.test(parts[0] ?? '')) return false;
+  const major = Number(parts[0]);
+  if (major <= 3) return true;
+  if (major !== 4) return false;
+  // A 1-2 digit part is the minor version; a date snapshot ("4-20250514") is 4.0.
+  const next = parts[1];
+  const minor = next !== undefined && next.length <= 2 && /^\d+$/.test(next) ? Number(next) : 0;
+  return minor <= 6;
+}

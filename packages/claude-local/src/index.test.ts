@@ -28,7 +28,10 @@ async function fixture(t: { after(fn: () => unknown): void }, over: Partial<Clau
       cb.searchParams.set('code', 'fake-code'); cb.searchParams.set('state', authorization.searchParams.get('state')!);
       assert.equal((await fetch(cb)).status, 200);
     },
-    fetch: async (url, init) => {
+    fetch: baseFetch,
+    ...over,
+  };
+  async function baseFetch(url: string | URL | Request, init?: RequestInit): Promise<Response> {
       assert.equal(init?.redirect, 'error');
       const u = String(url), headers = init?.headers as Record<string, string>;
       if (u === TOKEN_URL) {
@@ -40,10 +43,8 @@ async function fixture(t: { after(fn: () => unknown): void }, over: Partial<Clau
       if (u.includes('/models')) return Response.json({ data: c.models, has_more: false });
       if (u.endsWith('/messages')) return new Response(c.sse, { headers: { 'Content-Type': 'text/event-stream' } });
       throw new Error('unexpected ' + u);
-    },
-    ...over,
-  };
-  return { client: createClaudeClient(options), c, advance: (ms: number) => { clock += ms; }, auth: () => authorization, saved: () => saved };
+  }
+  return { client: createClaudeClient(options), baseFetch, c, advance: (ms: number) => { clock += ms; }, auth: () => authorization, saved: () => saved };
 }
 
 test('loopback sign-in: localhost redirect, PKCE, scopes, token exchange, account label', async t => {
@@ -133,6 +134,36 @@ test('an expired token refreshes with the rotated replacement; a rejected refres
   advance(3_600_000); c.tokenStatus = 400;
   await assert.rejects(client.listModels(), (e: ClaudeError) => e.code === 'reconnect-required');
   assert.equal((await client.status()).connected, false);
+});
+
+test('a 401 forces one refresh and retries once, for generate and listModels', async t => {
+  let rejectNext = 0;
+  const f = await fixture(t, { fetch: async (url, init) => {
+    if (rejectNext > 0 && String(url) !== TOKEN_URL) { rejectNext--; f.c.api.push({ url: String(url), headers: init?.headers as Record<string, string>, body: undefined }); return Response.json({ error: 'expired' }, { status: 401 }); }
+    return f.baseFetch(url, init);
+  } });
+  await f.client.signIn();
+  rejectNext = 1;
+  assert.deepEqual(await f.client.generate({ model: 'claude-sonnet-4-5', input: 'hi' }), { text: 'Hello world' });
+  assert.equal(f.c.tokenBodies.length, 2);
+  assert.equal(f.c.tokenBodies[1].grant_type, 'refresh_token');
+  assert.deepEqual(f.c.api.map(a => a.headers.Authorization), ['Bearer access-1', 'Bearer access-2']);
+  rejectNext = 1;
+  assert.equal((await f.client.listModels()).length, 2);
+  assert.equal(f.c.tokenBodies.length, 3);
+  rejectNext = 2;
+  await assert.rejects(f.client.listModels(), (e: ClaudeError) => e.code === 'reconnect-required');
+  assert.equal(f.c.tokenBodies.length, 4);
+});
+
+test('a 401 followed by a rejected refresh requires sign-in and clears the tokens', async t => {
+  let reject = false;
+  const f = await fixture(t, { fetch: async (url, init) => reject && String(url) !== TOKEN_URL ? (f.c.tokenStatus = 401, Response.json({}, { status: 401 })) : f.baseFetch(url, init) });
+  await f.client.signIn();
+  reject = true;
+  await assert.rejects(f.client.generate({ model: 'claude-sonnet-4-5', input: 'hi' }), (e: ClaudeError) => e.code === 'reconnect-required');
+  assert.equal((await f.client.status()).connected, false);
+  assert.equal(f.c.tokenBodies.length, 2);
 });
 
 test('API failures map to codes without leaking text', async t => {

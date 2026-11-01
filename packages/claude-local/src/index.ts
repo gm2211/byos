@@ -93,11 +93,13 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
     const tokens = token(await body(response));
     return locked(async () => { const s: State = { version: 1, tokens }; await save(s); return statusOf(s); }, signal);
   }
-  async function credential(signal?: AbortSignal): Promise<string> {
+  /** The access token to use. With `rejected`, the API just refused that token (401): refresh now even if it looks
+   *  unexpired, unless another process already rotated it. */
+  async function credential(signal?: AbortSignal, rejected?: string): Promise<string> {
     return locked(async () => {
       const s = await load(), t = s.tokens;
       if (!t) throw new ClaudeError('reconnect-required');
-      if (t.expiresAt > now() + 60_000) return t.access;
+      if (rejected === undefined ? t.expiresAt > now() + 60_000 : t.access !== rejected && t.expiresAt > now() + 60_000) return t.access;
       if (!t.refresh) { delete s.tokens; await save(s); throw new ClaudeError('reconnect-required'); }
       const response = await call(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildClaudeTokenRequest({ kind: 'refresh_token', refreshToken: t.refresh })) });
       if (response.status === 400 || response.status === 401) { await response.body?.cancel().catch(() => {}); delete s.tokens; await save(s); throw new ClaudeError('reconnect-required', response.status); }
@@ -110,6 +112,14 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
   const headers = (access: string, json: boolean): Record<string, string> => ({
     Authorization: `Bearer ${access}`, 'anthropic-version': ANTHROPIC_VERSION, 'anthropic-beta': BETA_HEADER, ...(json ? { 'Content-Type': 'application/json' } : {}),
   });
+  /** Sends an authenticated request; on 401 forces one refresh and retries once. A refresh answered with 400/401
+   *  clears the tokens and fails with `reconnect-required`. */
+  async function authed(signal: AbortSignal | undefined, send: (access: string) => Promise<Response>): Promise<Response> {
+    const access = await credential(signal), response = await send(access);
+    if (response.status !== 401) return response;
+    await response.body?.cancel().catch(() => {});
+    return send(await credential(signal, access));
+  }
   async function guarded<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     try { return await run(); } catch (e) { checkSignal(signal); if (e instanceof ClaudeError) throw e; throw new ClaudeError('unavailable'); }
   }
@@ -130,10 +140,11 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
     },
     disconnect: () => guarded(() => locked(async () => { await save({ version: 1 }); })),
     listModels: signal => guarded(async () => {
-      const access = await credential(signal), models: ClaudeModel[] = [];
+      const models: ClaudeModel[] = [];
       let after = '';
       for (let page = 0; page < 5; page++) {
-        const response = await call(`${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`, { headers: headers(access, false) }, signal);
+        const url = `${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`;
+        const response = await authed(signal, access => call(url, { headers: headers(access, false) }, signal));
         if (!response.ok) { await response.body?.cancel().catch(() => {}); throw httpError(response.status); }
         const payload = await body(response);
         if (!Array.isArray(payload.data)) throw new ClaudeError('invalid-response');
@@ -145,17 +156,17 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
     }, signal),
     generate: input => guarded(async () => {
       if (!str(input.model, 128) || /\s/.test(input.model) || typeof input.input !== 'string' || !input.input.trim() || input.input.length > 1_000_000 || (input.instructions !== undefined && (typeof input.instructions !== 'string' || input.instructions.length > 1_000_000))) throw new ClaudeError('unsupported');
-      const access = await credential(input.signal);
       const think = thinksByDefault(input.model);
       const maxTokens = input.maxTokens && input.maxTokens > 0 ? input.maxTokens : 2048;
-      const response = await call(`${API}/messages`, { method: 'POST', headers: headers(access, true), body: JSON.stringify({
+      const payload = JSON.stringify({
         model: input.model, stream: true,
         // Thinking counts against max_tokens; low effort plus a floor leaves room to answer.
         max_tokens: think ? Math.max(maxTokens, THINKING_MAX_TOKENS_FLOOR) : maxTokens,
         system: [{ type: 'text', text: SYSTEM_PREFIX }, ...(input.instructions ? [{ type: 'text', text: input.instructions }] : [])],
         messages: [{ role: 'user', content: input.input }],
         ...(think ? { output_config: { effort: 'low' } } : {}),
-      }) }, input.signal, 10 * 60_000);
+      });
+      const response = await authed(input.signal, access => call(`${API}/messages`, { method: 'POST', headers: headers(access, true), body: payload }, input.signal, 10 * 60_000));
       if (!response.ok || !response.body) { await response.body?.cancel().catch(() => {}); throw httpError(response.status); }
       const reader = response.body.getReader(), decoder = new TextDecoder();
       let buffer = '', text = '', ended = false;
