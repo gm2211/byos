@@ -3,6 +3,11 @@
 React UI for the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
+- `PasteCodeSignIn`: paste-code subscription sign-in (Claude): a start button, then a labelled password input for
+  the code the provider shows, with exchanging and error states. Stateless: the host owns `status`
+  (`idle | awaiting-code | exchanging | error`), the `code` draft (`code` / `onCodeChange`), and `onStart` /
+  `onSubmit(code)` / `onCancel`; optional `remember`, `disclosure`, `privacyDetails`, `available` and `strings`.
+  `AiConnectService.pasteCode` renders it for a `pkce` method with `completion: 'paste-code'`.
 - `DeviceCodeSignIn`: one-time-code subscription sign-in (idle, preparing, code, completing, error,
   connected, unavailable), with a remember-on-this-browser toggle and privacy disclosure. Opt into
   compact Sign in, Privacy, and Help tabs for short setup dialogs.

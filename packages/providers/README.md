@@ -19,9 +19,23 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 Browser adapters run in the browser and talk straight to the provider. The
 token never goes to the site's own server. `claude()` talks to api.anthropic.com with an API key, or with a
 Claude Pro/Max subscription token (`sk-ant-oat…`): subscription tokens go out as a Bearer header with the OAuth
-beta flags and the Claude Code system block they require. Claude subscription sign-in is supported through
-[`@byos/claude-local`](../claude-local/README.md) (Node, Keychain, loopback OAuth plus a paste-code fallback),
-which issues the token; a browser page usually cannot send it itself (CORS), so spend it from a Node or native host.
+beta flags and the Claude Code system block they require. api.anthropic.com accepts those calls from a browser page;
+only Anthropic's OAuth token endpoint refuses browsers. In Node, sign-in is
+[`@byos/claude-local`](../claude-local/README.md) (Keychain, loopback OAuth plus a paste-code fallback), which issues the
+token. In a browser, pass `claude({ subscription: { tokenFetch, readCredential, saveCredential, namespace? } })`:
+`signIn` then offers `{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }` before the API-key
+method, and the stored credential (`claude-subscription:` + base64url JSON) is refreshed near expiry under a Web Lock
+and once more after a 401.
+
+- `beginClaudeSignIn()` returns `{ url, attempt }` (claude.ai authorize URL with S256 PKCE; the attempt expires after
+  20 minutes). `completeClaudeSignIn(tokenFetch, attempt, pasted, signal?)` parses `CODE#STATE` (or a bare code),
+  exchanges it, and returns the encoded credential. Errors are `ClaudeAuthError` / `ClaudeReconnectRequiredError`
+  (`status` 401) with fixed text, never provider text.
+- `claudeTokenRelayFetch({ path })` is the `tokenFetch` for a host that mounts `createClaudeTokenRelay`
+  (`@byos/server`): it carries only Anthropic's token URL and POSTs the same body to the host's same-origin `path`.
+  The exchange and each refresh therefore pass through the host's relay, which neither stores nor logs them.
+- A live sign-in against Anthropic's paste-code redirect is unverified.
+
 `claude({ subscriptionsPaused: true })` is an opt-in gate for hosts that must refuse subscription tokens
 (`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`). Max and Team plans also include monthly Claude API credits spent by
 ordinary keys; `CLAUDE_API_KEY_SETUP` (also on the sign-in method's `setup`) links the claim page and the key page.

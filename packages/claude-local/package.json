@@ -22,6 +22,7 @@
     "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
   },
   "dependencies": {
+    "@byos/core": "file:../core",
     "@napi-rs/keyring": "^2.1.0"
   },
   "devDependencies": {

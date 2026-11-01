@@ -12,7 +12,7 @@ The shared React component accepts the host start URL, localized strings, status
 
 ## Local ChatGPT plan connections
 
-`@byos/claude-local` is the Claude Pro/Max equivalent: same Node-only shape (app name, Keychain namespace, browser opener), loopback OAuth on `localhost:54134` with `beginPasteSignIn`/`completePasteSignIn` as the fallback. Vendor it with `--packages claude-local --engine omit`. Pair it with `claude()` from `@byos/providers` only for API keys; the client itself lists models and generates.
+`@byos/claude-local` is the Claude Pro/Max equivalent: same Node-only shape (app name, Keychain namespace, browser opener), loopback OAuth on `localhost:54134` with `beginPasteSignIn`/`completePasteSignIn` as the fallback. Vendor it with `--packages claude-local --engine omit`. Pair it with `claude()` from `@byos/providers` for API keys; the client itself lists models and generates. For a browser app with no Node process, see [Claude subscription in a browser app](#claude-subscription-in-a-browser-app).
 
 `@byos/chatgpt-local` provides a separate Node-only client for official ChatGPT plan usage. Consumer bindings supply the app name, unique Keychain namespace, and browser opener. Keep the client in the local application process and adapt safe status/model/result methods to your UI; never pass its token records through the existing browser `ByosProvider` contract.
 
@@ -23,6 +23,50 @@ See the [package README](../packages/chatgpt-local/README.md) and [local example
 Choose a stable namespace per consumer; it separates account registration, host identity, credentials and refresh coordination. Native macOS Keychain is the default. Inject a protected store for other supported local runtimes. A storage failure is not permission to use plaintext persistence. No token import from Codex, no secret-bearing shell arguments, no automatic provider/billing fallback.
 
 Use package-mode full-SHA vendoring with `--packages chatgpt-local --engine omit`. Browser bundle mode rejects Node-only packages. Enable the new path explicitly; this does not change existing browser provider storage or relay bindings.
+
+## Claude subscription in a browser app
+
+`claude()` is API-key-only until the host passes `subscription`. With it, the provider declares `{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }` before the API-key method, and refreshes the credential (single-flight, cross-tab) near expiry and once after a 401.
+
+```ts
+import { beginClaudeSignIn, claude, claudeTokenRelayFetch, completeClaudeSignIn } from '@byos/providers';
+
+const tokenFetch = claudeTokenRelayFetch({ path: '/api/ai/claude/token' }); // same-origin path to the relay
+const provider = claude({
+  subscription: {
+    tokenFetch,
+    namespace: 'my-site', // Web Lock name suffix
+    readCredential: () => vault.read('claude'),
+    saveCredential: value => vault.store('claude', value, vault.persistence('claude')),
+  },
+});
+
+// Start: open `url` in a new tab and keep `attempt` (20-minute TTL) in host state.
+const { url, attempt } = await beginClaudeSignIn();
+window.open(url, '_blank', 'noopener');
+// Finish with whatever the user pasted; store the result in the vault as the Claude token.
+const credential = await completeClaudeSignIn(tokenFetch, attempt, pasted);
+vault.store('claude', credential, 'session');
+```
+
+Render the paste step with `PasteCodeSignIn` (stateless; the host owns `status`, the `code` draft and callbacks) or hand `AiConnectService.pasteCode` to `AiConnectPanel`. On an error, keep the attempt so the user can paste again; clear the draft on cancel and success. The stored value is the encoded `claude-subscription:` credential; model calls send only its access token.
+
+The host mounts the relay itself, before any global body parser:
+
+```ts
+import { createClaudeTokenRelay } from '@byos/server';
+
+const claudeRelay = createClaudeTokenRelay({
+  basePath: '/api/ai/claude', // GET /status, POST /token
+  allowedOrigins: () => new Set(['https://my-site.example']),
+  enabled: () => process.env.CLAUDE_RELAY !== 'false',
+  resolveSession: async token => sessions.get(token), // optional; pair with readSession or sessionHeader
+  sessionHeader: 'X-My-Session',
+});
+app.use(claudeRelay.router); // before app.use(express.json())
+```
+
+Limits to state in the host's UI and docs: sign-in is paste-code only (no popup or redirect); the host's server sees the code exchange and each refresh, and the tokens in those responses, in transit (it stores and logs nothing); the relay accepts only the Claude Code client's two grant shapes, 4 KiB bodies, same-origin browser calls, 20 requests a minute per account or address and 300 overall; and live acceptance of the paste-code redirect by Anthropic is unverified. `claude({ subscriptionsPaused: true })` still removes the sign-in method and refuses subscription credentials.
 
 ## Storage and session lifetime
 

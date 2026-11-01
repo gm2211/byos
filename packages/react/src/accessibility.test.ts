@@ -9,6 +9,7 @@ import { AiAccountSettings } from '../dist/AiAccountSettings.js';
 import { AiConnectPanel } from '../dist/AiConnectPanel.js';
 import { AiProviderPicker } from '../dist/AiProviderPicker.js';
 import { DeviceCodeSignIn } from '../dist/DeviceCodeSignIn.js';
+import { PasteCodeSignIn } from '../dist/PasteCodeSignIn.js';
 import { SignInWithChatGPT } from '../dist/SignInWithChatGPT.js';
 
 test('AiAccountSettings starts on Model, exposes provider switching, and mounts one settings pane', () => {
@@ -383,4 +384,73 @@ test('AiConnectPanel strings are overridable', () => {
   const html = connectPanel({ strings: { heading: 'Conectar IA', pickerLabel: 'Elige' } });
   assert.match(html, /Conectar IA/);
   assert.match(html, /aria-label="Elige"/);
+});
+
+const pasteProps = (overrides: Record<string, unknown> = {}) => ({
+  providerName: 'Claude', status: 'idle', code: '', onCodeChange: connectNoop, onStart: connectNoop, onSubmit: connectNoop, onCancel: connectNoop, ...overrides,
+});
+const paste = (overrides: Record<string, unknown> = {}) => renderToStaticMarkup(createElement(PasteCodeSignIn, pasteProps(overrides) as never));
+
+test('PasteCodeSignIn idle shows a start button, the disclosure, and a disabled unavailable state', () => {
+  const idle = paste({ disclosure: 'The host passes your sign-in to Anthropic and never stores it.' });
+  assert.match(idle, /<h3[^>]*>Sign in with Claude<\/h3>/);
+  assert.match(idle, />Sign in with Claude<\/span>/);
+  assert.match(idle, /The host passes your sign-in to Anthropic/);
+  assert.doesNotMatch(idle, /<input/);
+  const unavailable = paste({ available: false });
+  assert.match(unavailable, /role="status">Claude sign-in is unavailable right now\./);
+  assert.match(unavailable, /<button[^>]*disabled=""[^>]*><span>Sign-in unavailable<\/span>/);
+});
+
+test('PasteCodeSignIn awaiting-code has a labelled password input, a hint, and an alert for errors', () => {
+  const html = paste({ status: 'awaiting-code', code: 'abc#def', error: 'That code did not match.' });
+  const input = /<input[^>]*id="([^"]+)"[^>]*>/.exec(html);
+  assert.ok(input);
+  assert.match(input[0], /type="password"/);
+  assert.match(input[0], /autoComplete="off"|autocomplete="off"/i);
+  assert.match(input[0], /value="abc#def"/);
+  assert.match(html, new RegExp(`<label[^>]*for="${input[1]}"[^>]*>Paste the code Claude shows you</label>`));
+  assert.match(html, /After you approve, Claude shows a code\. Copy all of it and paste it here\./);
+  assert.match(input[0], /aria-describedby="[^"]*-hint[^"]*-error"/);
+  assert.match(html, /role="alert">That code did not match\./);
+  assert.match(html, /<button[^>]*type="submit"[^>]*>Connect<\/button>/);
+  assert.match(html, />Cancel sign-in<\/button>/);
+});
+
+test('PasteCodeSignIn disables submit while empty or exchanging and offers a reopen after an error', () => {
+  assert.match(paste({ status: 'awaiting-code', code: '  ' }), /<button[^>]*type="submit"[^>]*disabled=""/);
+  const exchanging = paste({ status: 'exchanging', code: 'abc' });
+  assert.match(exchanging, /<input[^>]*disabled=""/);
+  assert.match(exchanging, /aria-busy="true"[^>]*>Completing sign-in…<\/button>|disabled=""[^>]*aria-busy="true"/);
+  const failed = paste({ status: 'error', code: 'abc', error: 'Try again.' });
+  assert.match(failed, /Open Claude again/);
+  assert.match(failed, /aria-invalid="true"/);
+  assert.doesNotMatch(paste({ status: 'awaiting-code', code: 'abc' }), /Open Claude again/);
+});
+
+test('PasteCodeSignIn renders remember and privacy details and overridable strings', () => {
+  const html = paste({ remember: { checked: true, onChange: connectNoop }, privacyDetails: createElement('p', null, 'Details here'), strings: { connectTitle: 'Conectar', connectButton: 'Entrar' } });
+  assert.match(html, /type="checkbox"[^>]*checked=""/);
+  assert.match(html, /How sign-in and privacy work/);
+  assert.match(html, /Details here/);
+  assert.match(html, /<h3[^>]*>Conectar<\/h3>/);
+  assert.match(html, />Entrar<\/span>/);
+});
+
+test('AiConnectPanel renders PasteCodeSignIn only for a paste-code pkce method with a pasteCode controller', () => {
+  const claudeLike = (overrides: Record<string, unknown> = {}) => connectService({
+    provider: { id: 'claude', displayName: 'Claude', signIn: [{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }, { kind: 'api-key', hint: 'A key.' }] },
+    deviceCode: undefined,
+    ...overrides,
+  });
+  const pasteCode = { status: 'awaiting-code', code: '', onCodeChange: connectNoop, onStart: connectNoop, onSubmit: connectNoop, onCancel: connectNoop };
+  const html = connectPanel({ selectedId: 'claude', services: [claudeLike({ pasteCode })] });
+  assert.match(html, /byos-signin-paste/);
+  assert.match(html, /Paste the code Claude shows you/);
+  assert.ok(html.indexOf('byos-signin-paste') < html.indexOf('byos-connect-key'));
+  const without = connectPanel({ selectedId: 'claude', services: [claudeLike({ apiKey: undefined })] });
+  assert.doesNotMatch(without, /byos-signin-paste/);
+  // A plain pkce controller does not stand in for a paste-code method.
+  const plainPkce = connectPanel({ selectedId: 'claude', services: [claudeLike({ apiKey: undefined, pkce: { onStart: connectNoop } })] });
+  assert.doesNotMatch(plainPkce, /Sign in with Claude<\/button>/);
 });

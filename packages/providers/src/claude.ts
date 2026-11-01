@@ -1,13 +1,39 @@
-import type { ApiKeySetupStep, ByosProvider, CatalogModel, ChatEvent, ChatRequest, ReasoningEffort } from '@byos/core';
+import {
+  CLAUDE_CODE_SYSTEM_PREFIX,
+  CLAUDE_OAUTH_BETA,
+  createCredentialRefresher,
+  type ApiKeySetupStep,
+  type ByosProvider,
+  type CatalogModel,
+  type ChatEvent,
+  type ChatRequest,
+  type ReasoningEffort,
+  type SignInMethod,
+} from '@byos/core';
+import {
+  claudeNeedsRefresh,
+  ClaudeReconnectRequiredError,
+  decodeClaudeCredential,
+  isClaudeSubscriptionRecord,
+  refreshClaudeCredential,
+  type ClaudeCredential,
+  type ClaudeTokenFetch,
+} from './claude-sign-in.js';
 import { ProviderRequestError, safeProviderErrorText } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 
 /**
  * Claude (Anthropic) adapter. Talks to api.anthropic.com with an API key (`x-api-key`) or, for a
  * Claude Pro/Max subscription token (`sk-ant-oat…`), with a Bearer header, the OAuth beta flags and the
- * Claude Code system block that such tokens require. Subscription sign-in itself is `@byos/claude-local`
- * (Node, Keychain, loopback OAuth with a paste fallback); this adapter only spends a token it is handed.
- * Browsers usually cannot send subscription tokens (CORS), so use them from a Node/native host.
+ * Claude Code system block that such tokens require. Browsers can send those: api.anthropic.com allows
+ * Bearer calls from pages. Only Anthropic's token endpoint refuses browsers, so:
+ *
+ * - In a browser, pass `subscription` (a `claudeTokenRelayFetch` for the host's token relay plus where
+ *   the vault keeps the credential) and `signIn` offers the paste-code flow (`beginClaudeSignIn` /
+ *   `completeClaudeSignIn`). The credential is the encoded `claude-subscription:` string; this adapter
+ *   refreshes it near expiry (single-flight, cross-tab) and once more after a 401.
+ * - In Node/native, subscription sign-in is `@byos/claude-local` (Keychain, loopback OAuth with a paste
+ *   fallback); this adapter then only spends a raw `sk-ant-oat` token it is handed.
  *
  * `subscriptionsPaused` is an opt-in policy gate for hosts that must refuse subscription tokens
  * (`CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE`). It is off by default: subscription sign-in is supported.
@@ -17,7 +43,9 @@ import { iterateSseEvents } from './sse.js';
  * Claude Console organization and are spent by ordinary API keys, so the sign-in links to the claim
  * page and the key page.
  *
- * TOKEN RULE: the credential goes only to api.anthropic.com.
+ * TOKEN RULE: the credential goes only to api.anthropic.com. Claude exception (approved 2026-11-01):
+ * the code exchange and each refresh grant pass through the host's fixed-destination token relay
+ * (the token endpoint blocks browsers); the relay neither stores nor logs them.
  */
 export const ANTHROPIC_POLICY_URL = 'https://code.claude.com/docs/en/legal-and-compliance';
 export const CLAUDE_PLAN_CREDITS_URL = 'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers';
@@ -27,9 +55,8 @@ export const CLAUDE_API_KEY_SETUP: ApiKeySetupStep[] = [
   { label: 'Create an API key in Claude Console', url: 'https://platform.claude.com/settings/keys' },
 ];
 export const CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE = 'This app has paused Claude subscription sign-in. Use an API key, or pick another service.';
-/** Beta flags and system block a subscription Bearer token needs. */
-export const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20,claude-code-20250219';
-export const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+/** Beta flags and system block a subscription Bearer token needs (defined in @byos/core). */
+export { CLAUDE_OAUTH_BETA, CLAUDE_CODE_SYSTEM_PREFIX };
 
 const API = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -150,15 +177,87 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   yield { type: 'done' };
 }
 
-export function claude(options: { subscriptionsPaused?: boolean } = {}): ByosProvider {
+const API_KEY_METHOD: SignInMethod = {
+  kind: 'api-key',
+  hint: 'A Claude API key from platform.claude.com. Max and Team plans include monthly API credits for it.',
+  setup: CLAUDE_API_KEY_SETUP,
+};
+
+export type ClaudeSubscriptionOptions = {
+  /** `claudeTokenRelayFetch({ path })`: how refresh grants reach Anthropic's token endpoint. */
+  tokenFetch: ClaudeTokenFetch;
+  /** The credential as the vault holds it now (another tab may have refreshed it). */
+  readCredential: () => string | null | undefined;
+  /** Saves a refreshed credential in the same place. */
+  saveCredential: (value: string) => void;
+  /** Site-specific suffix for the cross-tab Web Lock. */
+  namespace?: string;
+};
+
+export type ClaudeProviderOptions = {
+  subscriptionsPaused?: boolean;
+  /** Browser subscription sign-in and refresh. Without it only API keys and raw issued tokens are offered. */
+  subscription?: ClaudeSubscriptionOptions;
+};
+
+export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
   const paused = options.subscriptionsPaused ?? false;
+  const subscription = options.subscription;
+  const refresher = subscription && createCredentialRefresher({
+    lockName: `byos-claude-refresh:${subscription.namespace?.trim() || 'default'}`,
+    readCredential: () => subscription.readCredential(),
+    saveCredential: value => subscription.saveCredential(value),
+    reconnectError: () => new ClaudeReconnectRequiredError(),
+  });
+
+  /** The string to send as the key: an encoded record becomes its (refreshed) access token. */
+  async function accessToken(token: string, force: boolean, signal?: AbortSignal): Promise<string> {
+    requireKey(token, paused);
+    if (!isClaudeSubscriptionRecord(token)) return token;
+    const current: ClaudeCredential | undefined = decodeClaudeCredential(token);
+    if (!current) throw new ClaudeReconnectRequiredError();
+    const expired = current.expiresAt <= Date.now();
+    if (!force && !claudeNeedsRefresh(current)) return current.accessToken;
+    if (!subscription || !refresher || !current.refreshToken) {
+      if (force || expired) throw new ClaudeReconnectRequiredError();
+      return current.accessToken;
+    }
+    const value = await refresher.refreshed(token, () => refreshClaudeCredential(subscription.tokenFetch, current), signal);
+    const next = decodeClaudeCredential(value);
+    if (!next) throw new ClaudeReconnectRequiredError();
+    return next.accessToken;
+  }
+
+  /** One forced refresh and retry when Anthropic answers 401 before anything was produced. */
+  async function withRetry<T>(token: string, signal: AbortSignal | undefined, run: (key: string) => Promise<T>): Promise<T> {
+    const key = await accessToken(token, false, signal);
+    try { return await run(key); }
+    catch (error) {
+      if (!(error instanceof ProviderRequestError) || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
+      return run(await accessToken(subscription?.readCredential() || token, true, signal));
+    }
+  }
+
   return {
     id: 'claude',
     displayName: 'Claude',
-    signIn: [{ kind: 'api-key', hint: 'A Claude API key from platform.claude.com. Max and Team plans include monthly API credits for it.', setup: CLAUDE_API_KEY_SETUP }],
-    // Pro/Max subscription sign-in is @byos/claude-local (Node); this adapter takes the API key or an issued token.
+    signIn: subscription && !paused
+      ? [{ kind: 'pkce', handshakeViaSite: true, completion: 'paste-code' }, API_KEY_METHOD]
+      : [API_KEY_METHOD],
     availability: () => ({ available: true }),
-    listModels: (token, signal) => listClaudeModels(token, signal, paused),
-    stream: (token, request) => streamClaude(token, request, paused),
+    listModels: (token, signal) => withRetry(token, signal, key => listClaudeModels(key, signal, paused)),
+    async *stream(token, request) {
+      const key = await accessToken(token, false, request.signal);
+      const first = streamClaude(key, request, paused);
+      let started = false;
+      try {
+        for await (const event of first) { started = true; yield event; }
+        return;
+      } catch (error) {
+        if (started || !(error instanceof ProviderRequestError) || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
+      }
+      const retryKey = await accessToken(subscription?.readCredential() || token, true, request.signal);
+      yield* streamClaude(retryKey, request, paused);
+    },
   };
 }

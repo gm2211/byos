@@ -8,12 +8,19 @@ import type { ReasoningEffort } from './effort.js';
  * TOKEN RULE: `signIn` may use the site's backend once for the handshake (`handshakeViaSite: true`
  * must be disclosed in the UI). `listModels` and `stream` run in the browser and talk to the
  * provider directly, or through the ciphertext-only relay for providers that need browser TLS.
+ *
+ * Claude exception (approved 2026-11-01): the authorization-code exchange and each refresh grant pass
+ * through the host's fixed-destination token relay (Anthropic's token endpoint refuses browser
+ * origins). The relay neither stores nor logs them; inference stays browser -> Anthropic.
  */
 export type SignInMethod =
   /** OAuth device code: show a code, the user approves on the provider's site. */
   | { kind: 'device-code'; handshakeViaSite: boolean }
-  /** OAuth PKCE redirect or popup. */
-  | { kind: 'pkce'; handshakeViaSite: boolean }
+  /**
+   * OAuth PKCE redirect or popup. `completion: 'paste-code'` means the provider shows the user a
+   * code to copy back into the app instead of redirecting (default `'redirect'`).
+   */
+  | { kind: 'pkce'; handshakeViaSite: boolean; completion?: 'redirect' | 'paste-code' }
   /** User pastes a token they generated themselves (CLI or provider console). Never leaves the browser. */
   | { kind: 'paste-token'; hint: string }
   /**

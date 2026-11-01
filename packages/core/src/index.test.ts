@@ -122,3 +122,89 @@ test('refresh window matches the providers', () => {
   assert.equal(tokenNeedsRefresh(1500, 1000, 600), true);
   assert.equal(tokenNeedsRefresh(5000, 1000, 600), false);
 });
+
+test('Claude OAuth helpers: authorize URL, pasted code, token bodies and the strict request allowlist', async () => {
+  const core = await import('../dist/index.js');
+  const url = new URL(core.claudeAuthorizeUrl({ challenge: 'c'.repeat(43), state: 's'.repeat(43), redirectUri: core.CLAUDE_PASTE_REDIRECT_URI }));
+  assert.equal(`${url.origin}${url.pathname}`, 'https://claude.ai/oauth/authorize');
+  assert.equal(url.searchParams.get('code'), 'true');
+  assert.equal(url.searchParams.get('client_id'), core.CLAUDE_OAUTH_CLIENT_ID);
+  assert.equal(url.searchParams.get('response_type'), 'code');
+  assert.equal(url.searchParams.get('scope'), 'user:profile user:inference');
+  assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(url.searchParams.get('redirect_uri'), 'https://console.anthropic.com/oauth/code/callback');
+
+  assert.equal(core.parseClaudePastedCode(' abc#STATE ', 'STATE'), 'abc');
+  assert.equal(core.parseClaudePastedCode('abc', 'STATE'), 'abc');
+  assert.equal(core.parseClaudePastedCode('abc#OTHER', 'STATE'), undefined);
+  assert.equal(core.parseClaudePastedCode('a b#STATE', 'STATE'), undefined);
+  assert.equal(core.parseClaudePastedCode('', 'STATE'), undefined);
+  assert.equal(core.parseClaudePastedCode('x'.repeat(4097), 'STATE'), undefined);
+
+  const verifier = 'v'.repeat(43), state = 's'.repeat(43);
+  const exchange = core.buildClaudeTokenRequest({ kind: 'authorization_code', code: 'code-1', state, verifier, redirectUri: core.CLAUDE_PASTE_REDIRECT_URI });
+  assert.deepEqual(exchange, { grant_type: 'authorization_code', code: 'code-1', state, client_id: core.CLAUDE_OAUTH_CLIENT_ID, redirect_uri: core.CLAUDE_PASTE_REDIRECT_URI, code_verifier: verifier });
+  const refresh = core.buildClaudeTokenRequest({ kind: 'refresh_token', refreshToken: 'rt-1' });
+  assert.deepEqual(refresh, { grant_type: 'refresh_token', refresh_token: 'rt-1', client_id: core.CLAUDE_OAUTH_CLIENT_ID });
+  assert.deepEqual(core.validateClaudeTokenRequest(exchange), exchange);
+  assert.deepEqual(core.validateClaudeTokenRequest(refresh), refresh);
+
+  const bad: unknown[] = [
+    null, [], 'x', {}, { ...exchange, extra: 1 }, { ...refresh, extra: 1 },
+    { ...exchange, client_id: 'other' }, { ...refresh, client_id: 'other' },
+    { ...exchange, redirect_uri: 'https://evil.example/cb' },
+    { ...exchange, grant_type: 'password' },
+    { ...exchange, code: '' }, { ...exchange, code: 'a b' }, { ...exchange, code: 'x'.repeat(4097) }, { ...exchange, code: 5 },
+    { ...exchange, state: 'short' }, { ...exchange, state: `${'s'.repeat(42)}!` }, { ...exchange, code_verifier: 'v'.repeat(129) },
+    { ...refresh, refresh_token: '' }, { ...refresh, refresh_token: 'a\nb' }, { ...refresh, refresh_token: ['x'] },
+    { grant_type: 'refresh_token', client_id: core.CLAUDE_OAUTH_CLIENT_ID, refresh_token: 'x', code: 'y' },
+  ];
+  for (const value of bad) assert.equal(core.validateClaudeTokenRequest(value), undefined, JSON.stringify(value));
+
+  assert.deepEqual(core.filterClaudeTokenResponse({
+    access_token: 'at', refresh_token: 'rt', expires_in: 3600, token_type: 'Bearer', scope: 'user:inference',
+    account: { email_address: 'a@b.example', uuid: 'secret' }, organization: { uuid: 'x' }, extra: 1,
+  }), { access_token: 'at', refresh_token: 'rt', expires_in: 3600, token_type: 'Bearer', scope: 'user:inference', account: { email_address: 'a@b.example' } });
+  assert.deepEqual(core.filterClaudeTokenResponse({ access_token: 'at', expires_in: -1 }), { access_token: 'at' });
+  assert.equal(core.filterClaudeTokenResponse({ refresh_token: 'rt' }), undefined);
+  assert.equal(core.filterClaudeTokenResponse('nope'), undefined);
+});
+
+test('createCredentialRefresher runs one refresh for parallel callers and never overwrites a newer credential', async () => {
+  const { createCredentialRefresher } = await import('../dist/index.js');
+  let stored: string | null = 'v1';
+  const make = () => createCredentialRefresher({
+    lockName: 'test-lock', readCredential: () => stored, saveCredential: value => { stored = value; }, reconnectError: () => new Error('reconnect'),
+  });
+  let runs = 0;
+  const slow = async () => { runs++; await new Promise(resolve => setTimeout(resolve, 10)); return 'v2'; };
+  const refresher = make();
+  const results = await Promise.all([refresher.refreshed('v1', slow), refresher.refreshed('v1', slow), refresher.refreshed('v1', slow)]);
+  assert.deepEqual(results, ['v2', 'v2', 'v2']);
+  assert.equal(runs, 1);
+  assert.equal(stored, 'v2');
+
+  // A newer credential saved elsewhere (another tab) wins, and the refresh is not attempted.
+  stored = 'v9';
+  runs = 0;
+  assert.equal(await make().refreshed('v2', slow), 'v9');
+  assert.equal(runs, 0);
+
+  // Reconnect during the refresh: the rotated grant is not saved over the newer choice.
+  stored = 'v2';
+  assert.equal(await make().refreshed('v2', async () => { stored = 'v7'; return 'v3'; }), 'v7');
+  assert.equal(stored, 'v7');
+  // Disconnect during the refresh surfaces the reconnect error.
+  stored = 'v2';
+  await assert.rejects(() => make().refreshed('v2', async () => { stored = null; return 'v3'; }), /reconnect/);
+  assert.equal(stored, null);
+
+  // A caller that aborts stops waiting; the refresh still finishes and is saved.
+  stored = 'v2';
+  const controller = new AbortController();
+  const waiting = make().refreshed('v2', async () => { await new Promise(resolve => setTimeout(resolve, 10)); return 'v5'; }, controller.signal);
+  controller.abort();
+  await assert.rejects(waiting);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(stored, 'v5');
+});

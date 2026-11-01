@@ -1,7 +1,8 @@
 /** Node-only Claude Pro/Max subscription client: OAuth (loopback + paste), Keychain tokens, direct HTTPS. */
+import { buildClaudeTokenRequest, CLAUDE_CODE_SYSTEM_PREFIX, CLAUDE_OAUTH_BETA } from '@byos/core';
 import { ClaudeError, checkSignal, httpError } from './errors.js';
 import { keychainStore, processLock, type CredentialStore } from './storage.js';
-import { CLIENT_ID, TOKEN_URL, PASTE_REDIRECT_URI, loopbackAuthorize, newPkce, authorizeUrl, parsePastedCode, type Pkce } from './oauth.js';
+import { TOKEN_URL, PASTE_REDIRECT_URI, loopbackAuthorize, newPkce, authorizeUrl, parsePastedCode, type Pkce } from './oauth.js';
 export { ClaudeError, type ClaudeErrorCode } from './errors.js';
 export type { CredentialStore } from './storage.js';
 export { CLIENT_ID, AUTHORIZE_URL, TOKEN_URL, SCOPE, LOOPBACK_PORT, PASTE_REDIRECT_URI } from './oauth.js';
@@ -9,9 +10,9 @@ export { CLIENT_ID, AUTHORIZE_URL, TOKEN_URL, SCOPE, LOOPBACK_PORT, PASTE_REDIRE
 export const API = 'https://api.anthropic.com/v1';
 export const ANTHROPIC_VERSION = '2023-06-01';
 /** Beta flags a subscription Bearer token needs. */
-export const BETA_HEADER = 'oauth-2025-04-20,claude-code-20250219';
+export const BETA_HEADER = CLAUDE_OAUTH_BETA;
 /** Subscription tokens are only honored for requests that open with this system block. */
-export const SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+export const SYSTEM_PREFIX = CLAUDE_CODE_SYSTEM_PREFIX;
 const THINKING_MAX_TOKENS_FLOOR = 4096;
 
 export type ClaudeAccount = { label: string };
@@ -87,7 +88,7 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
     return { access: payload.access_token, refresh: str(payload.refresh_token) ? payload.refresh_token : previous?.refresh, expiresAt: now() + expiresIn * 1000, ...(label ? { label } : {}) };
   };
   async function exchange(code: string, pkce: Pkce, signal?: AbortSignal): Promise<ClaudeStatus> {
-    const response = await call(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grant_type: 'authorization_code', code, state: pkce.state, client_id: CLIENT_ID, redirect_uri: pkce.redirectUri, code_verifier: pkce.verifier }) }, signal);
+    const response = await call(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildClaudeTokenRequest({ kind: 'authorization_code', code, state: pkce.state, verifier: pkce.verifier, redirectUri: pkce.redirectUri })) }, signal);
     if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new ClaudeError('auth-failed', response.status); }
     const tokens = token(await body(response));
     return locked(async () => { const s: State = { version: 1, tokens }; await save(s); return statusOf(s); }, signal);
@@ -98,7 +99,7 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
       if (!t) throw new ClaudeError('reconnect-required');
       if (t.expiresAt > now() + 60_000) return t.access;
       if (!t.refresh) { delete s.tokens; await save(s); throw new ClaudeError('reconnect-required'); }
-      const response = await call(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: CLIENT_ID }) });
+      const response = await call(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildClaudeTokenRequest({ kind: 'refresh_token', refreshToken: t.refresh })) });
       if (response.status === 400 || response.status === 401) { await response.body?.cancel().catch(() => {}); delete s.tokens; await save(s); throw new ClaudeError('reconnect-required', response.status); }
       if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new ClaudeError('unavailable', response.status); }
       // The refresh token rotates: persist the replacement even if this caller cancels meanwhile.

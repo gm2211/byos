@@ -3,6 +3,7 @@ import type { ByosProvider, SignInMethod } from '@byos/core';
 import { AiAccountSettings } from './AiAccountSettings.js';
 import { AiProviderPicker } from './AiProviderPicker.js';
 import { DeviceCodeSignIn, type DeviceCodeSignInProps } from './DeviceCodeSignIn.js';
+import { PasteCodeSignIn, type PasteCodeSignInProps } from './PasteCodeSignIn.js';
 
 /**
  * The whole "connect an AI service" surface in one native component: a provider picker, then for
@@ -46,6 +47,8 @@ export type AiConnectService = {
   /** Host-run flows, one per SignInMethod kind. A declared kind without a controller is not rendered. */
   deviceCode?: Omit<DeviceCodeSignInProps, 'providerName' | 'connected' | 'onDisconnect' | 'compact'>;
   pkce?: AiConnectPkce;
+  /** Paste-code flow (a `pkce` method with `completion: 'paste-code'`). Takes precedence over `pkce` for such methods. */
+  pasteCode?: Omit<PasteCodeSignInProps, 'providerName'>;
   apiKey?: AiConnectKeyForm;
   pasteToken?: AiConnectKeyForm;
   remember?: { checked: boolean; onChange: (checked: boolean) => void; error?: string };
@@ -168,7 +171,11 @@ function AccountTab({ service, strings }: { service: AiConnectService; strings: 
       node = <div className="byos-connect-method">
         <DeviceCodeSignIn showProviderIdentity={false} helpMode="contextual" {...service.deviceCode} providerName={name} connected={false} onDisconnect={noop} compact/>
       </div>;
-    } else if (method.kind === 'pkce' && service.pkce) {
+    } else if (method.kind === 'pkce' && method.completion === 'paste-code' && service.pasteCode) {
+      node = <div className="byos-connect-method">
+        <PasteCodeSignIn showProviderIdentity={false} {...service.pasteCode} providerName={name}/>
+      </div>;
+    } else if (method.kind === 'pkce' && method.completion !== 'paste-code' && service.pkce) {
       const pkce = service.pkce;
       node = <div className="byos-connect-method">
         <button type="button" className="byos-connect-primary" disabled={pkce.busy} aria-busy={pkce.busy || undefined} onClick={pkce.onStart}>{pkce.busy ? strings.connecting : pkce.label ?? strings.signInWith(name)}</button>
