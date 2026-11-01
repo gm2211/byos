@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 // Built output: the sources use NodeNext `.js` imports (see shared/ai-protocol/src/index.test.ts).
+import * as core from '../dist/index.js';
 import { createCredentialVault, createEffortStore, createModelCatalogCache, pickerModels, tokenNeedsRefresh } from '../dist/index.js';
 
 class MemoryStorage implements Storage {
@@ -207,4 +209,57 @@ test('createCredentialRefresher runs one refresh for parallel callers and never 
   await assert.rejects(waiting);
   await new Promise(resolve => setTimeout(resolve, 40));
   assert.equal(stored, 'v5');
+});
+
+const xaiVectors = JSON.parse(readFileSync(new URL('../conformance/xai-oauth.json', import.meta.url), 'utf8'));
+const decodedPairs = (body: string) => [...new URLSearchParams(body).entries()];
+
+test('xAI OAuth constants and headers match the conformance vectors', () => {
+  const c = xaiVectors.constants;
+  assert.equal(core.XAI_OAUTH_CLIENT_ID, c.clientId);
+  assert.equal(core.XAI_DEVICE_CODE_URL, c.deviceCodeUrl);
+  assert.equal(core.XAI_TOKEN_URL, c.tokenUrl);
+  assert.equal(core.XAI_OAUTH_SCOPE, c.scope);
+  assert.equal(core.XAI_DEVICE_CODE_GRANT, c.deviceCodeGrant);
+  assert.equal(core.XAI_REFRESH_WINDOW_MS, c.refreshWindowMs);
+  assert.equal(core.XAI_DEFAULT_LIFETIME_SECONDS, c.defaultLifetimeSeconds);
+  assert.equal(core.XAI_DEVICE_MAX_WAIT_SECONDS, c.deviceMaxWaitSeconds);
+  assert.equal(core.XAI_DEVICE_DEFAULT_EXPIRES_SECONDS, c.deviceDefaultExpiresSeconds);
+  assert.equal(core.XAI_SLOW_DOWN_SECONDS, c.slowDownSeconds);
+  assert.deepEqual({ ...core.XAI_FORM_HEADERS }, xaiVectors.headers);
+  assert.deepEqual(Object.keys(core.XAI_FORM_HEADERS).sort(), ['Accept', 'Content-Type']);
+  assert.deepEqual({ ...core.XAI_DEVICE_CODE_CONFIG }, {
+    deviceCodeUrl: c.deviceCodeUrl, tokenUrl: c.tokenUrl, clientId: c.clientId, scope: c.scope,
+  });
+});
+
+test('xAI request builders produce the conformance requests', () => {
+  assert.equal(xaiVectors.requests.length, 3);
+  for (const vector of xaiVectors.requests) {
+    assert.equal(core.xaiTokenUrl(vector.input), vector.url, vector.name);
+    assert.deepEqual(core.xaiTokenRequestFields(vector.input), vector.fields, vector.name);
+    assert.deepEqual(decodedPairs(core.xaiFormBody(vector.input)), decodedPairs(vector.body), vector.name);
+  }
+});
+
+test('xAI token responses parse per the conformance vectors', () => {
+  for (const vector of xaiVectors.tokenResponses) {
+    const got = core.parseXaiTokenResponse(vector.payload, { previousRefreshToken: vector.previousRefreshToken, now: xaiVectors.now });
+    assert.deepEqual(got ?? null, vector.expected, vector.name);
+  }
+});
+
+test('xAI device start responses parse per the conformance vectors', () => {
+  for (const vector of xaiVectors.deviceStart) {
+    assert.deepEqual(core.parseXaiDeviceStart(vector.payload, xaiVectors.now) ?? null, vector.expected, vector.name);
+  }
+});
+
+test('xAI poll errors and refresh failures classify per the conformance vectors', () => {
+  for (const vector of xaiVectors.pollErrors) {
+    assert.equal(core.classifyXaiPollError(vector.status, vector.body), vector.expected, JSON.stringify(vector.body));
+  }
+  for (const vector of xaiVectors.refreshFailures) {
+    assert.equal(core.classifyXaiRefreshFailure(vector.status), vector.expected, String(vector.status));
+  }
 });

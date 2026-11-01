@@ -1,0 +1,390 @@
+{
+  "version": 1,
+  "note": "Synthetic vectors only; no real credentials. Compare requests by decoded field pairs and order (%20 and + are equivalent in form bodies). Live xAI behavior is unverified.",
+  "constants": {
+    "clientId": "b1a00492-073a-47ea-816f-4c329264a828",
+    "deviceCodeUrl": "https://auth.x.ai/oauth2/device/code",
+    "tokenUrl": "https://auth.x.ai/oauth2/token",
+    "scope": "openid profile email offline_access grok-cli:access api:access",
+    "deviceCodeGrant": "urn:ietf:params:oauth:grant-type:device_code",
+    "refreshWindowMs": 300000,
+    "defaultLifetimeSeconds": 3600,
+    "deviceMaxWaitSeconds": 900,
+    "deviceDefaultExpiresSeconds": 300,
+    "slowDownSeconds": 5
+  },
+  "headers": {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Accept": "application/json"
+  },
+  "now": 1700000000000,
+  "requests": [
+    {
+      "name": "device-start",
+      "url": "https://auth.x.ai/oauth2/device/code",
+      "method": "POST",
+      "fields": [
+        [
+          "client_id",
+          "b1a00492-073a-47ea-816f-4c329264a828"
+        ],
+        [
+          "scope",
+          "openid profile email offline_access grok-cli:access api:access"
+        ]
+      ],
+      "body": "client_id=b1a00492-073a-47ea-816f-4c329264a828&scope=openid+profile+email+offline_access+grok-cli%3Aaccess+api%3Aaccess",
+      "input": {
+        "kind": "device_start"
+      }
+    },
+    {
+      "name": "device-poll",
+      "url": "https://auth.x.ai/oauth2/token",
+      "method": "POST",
+      "fields": [
+        [
+          "grant_type",
+          "urn:ietf:params:oauth:grant-type:device_code"
+        ],
+        [
+          "client_id",
+          "b1a00492-073a-47ea-816f-4c329264a828"
+        ],
+        [
+          "device_code",
+          "SYNTHETIC-DEVICE-CODE"
+        ]
+      ],
+      "body": "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&client_id=b1a00492-073a-47ea-816f-4c329264a828&device_code=SYNTHETIC-DEVICE-CODE",
+      "input": {
+        "kind": "device_code",
+        "deviceCode": "SYNTHETIC-DEVICE-CODE"
+      }
+    },
+    {
+      "name": "refresh",
+      "url": "https://auth.x.ai/oauth2/token",
+      "method": "POST",
+      "fields": [
+        [
+          "grant_type",
+          "refresh_token"
+        ],
+        [
+          "refresh_token",
+          "synthetic-refresh-1"
+        ],
+        [
+          "client_id",
+          "b1a00492-073a-47ea-816f-4c329264a828"
+        ]
+      ],
+      "body": "grant_type=refresh_token&refresh_token=synthetic-refresh-1&client_id=b1a00492-073a-47ea-816f-4c329264a828",
+      "input": {
+        "kind": "refresh_token",
+        "refreshToken": "synthetic-refresh-1"
+      }
+    }
+  ],
+  "tokenResponses": [
+    {
+      "name": "full",
+      "previousRefreshToken": "prev",
+      "payload": {
+        "access_token": "a1",
+        "refresh_token": "r1",
+        "id_token": "i1",
+        "expires_in": 1800
+      },
+      "expected": {
+        "accessToken": "a1",
+        "refreshToken": "r1",
+        "idToken": "i1",
+        "expiresAt": 1700001800000
+      }
+    },
+    {
+      "name": "missing expires_in uses 3600s",
+      "payload": {
+        "access_token": "a1",
+        "refresh_token": "r1"
+      },
+      "expected": {
+        "accessToken": "a1",
+        "refreshToken": "r1",
+        "expiresAt": 1700003600000
+      }
+    },
+    {
+      "name": "missing refresh keeps previous",
+      "previousRefreshToken": "prev",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": 60
+      },
+      "expected": {
+        "accessToken": "a1",
+        "refreshToken": "prev",
+        "expiresAt": 1700000060000
+      }
+    },
+    {
+      "name": "no refresh and no previous",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": 60
+      },
+      "expected": {
+        "accessToken": "a1",
+        "expiresAt": 1700000060000
+      }
+    },
+    {
+      "name": "empty access token",
+      "payload": {
+        "access_token": "",
+        "expires_in": 60
+      },
+      "expected": null
+    },
+    {
+      "name": "non-string access token",
+      "payload": {
+        "access_token": 5
+      },
+      "expected": null
+    },
+    {
+      "name": "non-object payload",
+      "payload": "nope",
+      "expected": null
+    },
+    {
+      "name": "non-positive expires_in uses default",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": 0
+      },
+      "expected": {
+        "accessToken": "a1",
+        "expiresAt": 1700003600000
+      }
+    },
+    {
+      "name": "negative expires_in uses default",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": -5
+      },
+      "expected": {
+        "accessToken": "a1",
+        "expiresAt": 1700003600000
+      }
+    },
+    {
+      "name": "expires_in capped at one year",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": 999999999999
+      },
+      "expected": {
+        "accessToken": "a1",
+        "expiresAt": 1731536000000
+      }
+    }
+  ],
+  "deviceStart": [
+    {
+      "name": "full",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device",
+        "verification_uri_complete": "https://auth.x.ai/device?user_code=U-1",
+        "interval": 7,
+        "expires_in": 600
+      },
+      "expected": {
+        "deviceCode": "d",
+        "userCode": "U-1",
+        "verificationUri": "https://auth.x.ai/device",
+        "verificationUriComplete": "https://auth.x.ai/device?user_code=U-1",
+        "intervalSeconds": 7,
+        "expiresAt": 1700000600000
+      }
+    },
+    {
+      "name": "interval missing is 5, expires_in missing is 300",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device"
+      },
+      "expected": {
+        "deviceCode": "d",
+        "userCode": "U-1",
+        "verificationUri": "https://auth.x.ai/device",
+        "intervalSeconds": 5,
+        "expiresAt": 1700000300000
+      }
+    },
+    {
+      "name": "interval below 1 is raised to 1",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device",
+        "interval": 0.2
+      },
+      "expected": {
+        "deviceCode": "d",
+        "userCode": "U-1",
+        "verificationUri": "https://auth.x.ai/device",
+        "intervalSeconds": 1,
+        "expiresAt": 1700000300000
+      }
+    },
+    {
+      "name": "expires_in capped at 900",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device",
+        "expires_in": 5000
+      },
+      "expected": {
+        "deviceCode": "d",
+        "userCode": "U-1",
+        "verificationUri": "https://auth.x.ai/device",
+        "intervalSeconds": 5,
+        "expiresAt": 1700000900000
+      }
+    },
+    {
+      "name": "non-https verification uri rejected",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "http://auth.x.ai/device"
+      },
+      "expected": null
+    },
+    {
+      "name": "javascript uri rejected",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "javascript:alert(1)"
+      },
+      "expected": null
+    },
+    {
+      "name": "non-https complete uri dropped",
+      "payload": {
+        "device_code": "d",
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device",
+        "verification_uri_complete": "http://evil.example/"
+      },
+      "expected": {
+        "deviceCode": "d",
+        "userCode": "U-1",
+        "verificationUri": "https://auth.x.ai/device",
+        "intervalSeconds": 5,
+        "expiresAt": 1700000300000
+      }
+    },
+    {
+      "name": "missing device code rejected",
+      "payload": {
+        "user_code": "U-1",
+        "verification_uri": "https://auth.x.ai/device"
+      },
+      "expected": null
+    }
+  ],
+  "pollErrors": [
+    {
+      "status": 400,
+      "body": {
+        "error": "authorization_pending"
+      },
+      "expected": "pending"
+    },
+    {
+      "status": 400,
+      "body": {
+        "error": "slow_down"
+      },
+      "expected": "slow_down"
+    },
+    {
+      "status": 400,
+      "body": {
+        "error": "access_denied"
+      },
+      "expected": "declined"
+    },
+    {
+      "status": 400,
+      "body": {
+        "error": "authorization_denied"
+      },
+      "expected": "declined"
+    },
+    {
+      "status": 400,
+      "body": {
+        "error": "expired_token"
+      },
+      "expected": "expired"
+    },
+    {
+      "status": 400,
+      "body": {
+        "error": "invalid_request"
+      },
+      "expected": "failed"
+    },
+    {
+      "status": 500,
+      "body": {},
+      "expected": "failed"
+    },
+    {
+      "status": 400,
+      "body": "garbage",
+      "expected": "failed"
+    }
+  ],
+  "refreshFailures": [
+    {
+      "status": 400,
+      "body": {
+        "error": "invalid_grant"
+      },
+      "expected": "reconnect"
+    },
+    {
+      "status": 401,
+      "expected": "reconnect"
+    },
+    {
+      "status": 403,
+      "expected": "transient"
+    },
+    {
+      "status": 429,
+      "expected": "transient"
+    },
+    {
+      "status": 500,
+      "expected": "transient"
+    },
+    {
+      "status": 503,
+      "expected": "transient"
+    }
+  ]
+}
