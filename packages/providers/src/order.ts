@@ -4,8 +4,8 @@
  *
  * The major AI subscriptions come first (Claude, ChatGPT, Grok, Gemini), then the pay-as-you-go
  * services: OpenRouter, Groq, Hugging Face (Giulio, 2026-10-11). A listed key with no adapter yet,
- * such as Gemini, only reserves its place. Claude stays marked not recommended below because
- * Anthropic doesn't allow its subscriptions in third-party apps (see claude.ts).
+ * such as Gemini, only reserves its place. Every listed service is currently recommended, Claude
+ * included now that its subscription sign-in is supported (see claude.ts).
  */
 export type ServiceKey = 'claude' | 'chatgpt' | 'grok' | 'gemini' | 'openrouter' | 'groq' | 'huggingface';
 
@@ -13,7 +13,6 @@ export const DEFAULT_SERVICE_ORDER: readonly ServiceKey[] = ['claude', 'chatgpt'
 
 /** Why a service is listed but not recommended; absent means recommended. */
 export const NOT_RECOMMENDED_REASON: Partial<Record<ServiceKey, string>> = {
-  claude: "Anthropic doesn't allow subscription sign-in in other apps; use an API key (Max and Team plans include API credits).",
 };
 
 /** Sorts `items` by `order`; items whose key is not in `order` keep their relative place at the end. */
