@@ -14,6 +14,13 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   Hugging Face) keeps the order the provider returns and drops image, video, audio and embedding
   models such as `grok-imagine-image`, Imagen, Nano Banana, Veo and Lyria (`isChatModel`).
 - `claudeAcceptsTemperature(model)`: false for Claude 4.7 and later and every 5-series model, which answer a `temperature` field with a 400; true for Claude 3.x and 4.0-4.6 (an unrecognised id is false, so the API default applies). `ChatRequest` has no temperature field; use this when your own request code sets one.
+- `ProviderRequestError(message, status)`: thrown wherever a provider HTTP status is known, including
+  `listModelsForEndpoint`, `listOpenRouterModels` and `readOpenRouterKeyInfo` (their message text is
+  unchanged; `OpenRouterAuthenticationError` is one, with status 401 or 403).
+- `classifyProviderError(error)`: returns `{ kind, message }` for the UI. `kind` is `auth` (401/403, reconnect),
+  `quota` (402/429), `aborted` (`AbortError` or `TimeoutError`) or `unavailable` (anything else). It reads the
+  numeric `status` off `ProviderRequestError` or any error that carries one (such as `ClaudeAuthError`).
+  `message` is fixed text chosen by `kind`; provider text, which can echo request data, is never returned.
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
   its web_search tool exists.
 

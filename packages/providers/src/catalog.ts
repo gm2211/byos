@@ -1,6 +1,6 @@
 import type { CloudEndpoint } from './endpoints.js';
 import { PROVIDER_BASE_URLS } from './endpoints.js';
-import { safeProviderErrorText } from './chat.js';
+import { ProviderRequestError, safeProviderErrorText } from './chat.js';
 
 export type OpenRouterKeyInfo = {
   label?: string;
@@ -23,15 +23,15 @@ export type ProviderModel = {
 /** Motive's historical name for ProviderModel. */
 export type OpenRouterModel = ProviderModel;
 
-export class OpenRouterAuthenticationError extends Error {
-  constructor() {
-    super('OpenRouter rejected this key. Reconnect your OpenRouter account.');
+export class OpenRouterAuthenticationError extends ProviderRequestError {
+  constructor(status = 401) {
+    super('OpenRouter rejected this key. Reconnect your OpenRouter account.', status);
     this.name = 'OpenRouterAuthenticationError';
   }
 }
 
 function rejectInvalidCredential(status: number): void {
-  if (status === 401 || status === 403) throw new OpenRouterAuthenticationError();
+  if (status === 401 || status === 403) throw new OpenRouterAuthenticationError(status);
 }
 
 const API_ROOT = PROVIDER_BASE_URLS.openrouter;
@@ -59,7 +59,7 @@ export async function readOpenRouterKeyInfo(key: string, signal?: AbortSignal): 
   const response = await fetch(`${API_ROOT}/key`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${key}` } });
   rejectInvalidCredential(response.status);
   const payload = await response.json().catch(() => ({})) as { data?: OpenRouterKeyInfo; error?: { message?: string } };
-  if (!response.ok) throw new Error(safeProviderErrorText(payload, key) || 'OpenRouter rejected this key.');
+  if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, key) || 'OpenRouter rejected this key.', response.status);
   return payload.data ?? {};
 }
 
@@ -76,7 +76,7 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
     }>;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(safeProviderErrorText(payload, key) || 'Could not load OpenRouter models.');
+  if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, key) || 'Could not load OpenRouter models.', response.status);
   return (payload.data ?? [])
     .filter(model => model.id && model.supported_parameters?.includes('tools'))
     .map(model => {
@@ -162,7 +162,7 @@ export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: Ab
     data?: Array<{ id?: string; name?: string; created?: unknown }>;
     error?: { message?: string };
   };
-  if (!response.ok) throw new Error(safeProviderErrorText(payload, endpoint.apiKey) || 'Could not load models.');
+  if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, endpoint.apiKey) || 'Could not load models.', response.status);
   const seen = new Set<string>();
   return newestFirst((payload.data ?? [])
     .filter((model): model is { id: string; name?: string; created?: unknown } => {
