@@ -19,11 +19,11 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/claude-local` | Claude Pro/Max subscription sign-in for local Node apps; Keychain, loopback OAuth with a paste-code fallback, direct HTTPS |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
-| `@byos/providers` | Browser provider adapters plus credential-free on-device catalog and native bridge adapters |
+| `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in) plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
-| `@byos/server` | Bounded ciphertext relay, provider device-code broker, and identity-only website OIDC helper |
+| `@byos/server` | Bounded ciphertext relay, provider device-code broker, Claude token relay, and identity-only website OIDC helper |
 
 The shared React UI includes the command palette (`CommandPaletteProvider`), identity-only Sign in with ChatGPT, subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
 
@@ -39,6 +39,10 @@ Each package README documents its API. [Customization recipes](docs/customizatio
 ## Use a Claude Pro/Max subscription locally
 
 `@byos/claude-local` signs a user into their Claude subscription (OAuth + PKCE, loopback callback with a paste-code fallback), keeps the tokens in the macOS Keychain and calls `api.anthropic.com` directly. Claude subscription sign-in is supported; see the [package README](packages/claude-local/README.md) for the flow, headers and limits. For an API key instead, use `claude()` from `@byos/providers`.
+
+### In the browser
+
+A web app can offer the same Claude sign-in with no Node process. `claude({ subscription })` from `@byos/providers` adds a paste-code sign-in (`beginClaudeSignIn` / `completeClaudeSignIn`, rendered by `PasteCodeSignIn` in `@byos/react`): the user approves on claude.ai, which shows a code to paste back. Inference goes browser to `api.anthropic.com` with a Bearer token, which Anthropic allows from pages. Anthropic's OAuth *token* endpoint does not allow browser origins (CORS), so the authorization-code exchange and each refresh grant go through the host's fixed-destination relay, `createClaudeTokenRelay` from `@byos/server`. The relay forwards only those two validated grant shapes to `console.anthropic.com/v1/oauth/token`, returns a filtered response, and neither stores nor logs anything. The relay therefore sees the grants in transit; disclose that in the UI. A live end-to-end sign-in has not been verified against Anthropic's paste-code redirect; treat it as unverified until a host has done it. See the [recipe](docs/customization.md#claude-subscription-in-a-browser-app).
 
 ## Use ChatGPT without the browser TLS tunnel
 
@@ -87,6 +91,8 @@ Website identity uses the approved identity-only OpenID Connect flow. The server
 For `@byos/chatgpt-local`, credentials live in the user-owned local process and OS credential store. Its HTTPS requests go straight to official OpenAI endpoints. UI routes must be loopback-only, verify Host/Origin, protect mutations against CSRF, and never return tokens. This path is not a credential proxy for a hosted multi-user application.
 
 For existing browser adapters, provider credentials live in the browser. For providers whose existing device-code flow uses a disclosed initial exchange, the broker returns the token once and never persists or logs it; later model requests go directly from browser to provider. Manual token import never calls the application's backend.
+
+Claude is the one documented exception to "a provider token never touches the site's server": Anthropic's token endpoint blocks browsers, so the authorization-code exchange and each refresh grant pass through the host's fixed-destination token relay (`createClaudeTokenRelay`). The relay neither stores nor logs them, and inference stays browser to Anthropic. The exception was approved on 2026-11-01 and applies only to Claude's two token grants.
 
 Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed destinations (OpenAI, plus `auth.x.ai` only when the site opts into `xai-auth` for the Grok token refresh); it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
 

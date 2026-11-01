@@ -3,6 +3,19 @@
 Server half of the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
+`createClaudeTokenRelay(options)` returns `{ router, handle }`: a fixed-destination relay for Anthropic's OAuth
+token endpoint (`https://console.anthropic.com/v1/oauth/token`), which refuses browser origins. `GET
+${basePath}/status` reports `{ enabled }`; `POST ${basePath}/token` accepts only the Claude Code client's
+authorization-code exchange or refresh grant (strict allowlist, 4 KiB, `application/json`), forwards it with a 15 s
+timeout and no redirects, and returns only `access_token`, `refresh_token`, `expires_in`, `token_type`, `scope` and
+the account email. Upstream 400/401/403 become the same status with `{ error: 'invalid_grant' }`; anything else is
+502; upstream text is never echoed. Checks run in order: release gate (503), exact `Origin` (403), `Sec-Fetch-Site`
+same-origin (403), content type (415), size (413), the site session when `resolveSession` is set (401), then rate
+limits (20 a minute per account or address, 300 overall, 429), then validation (400). Mount the router before any
+global `express.json()`; it parses its own raw body. The relay stores and logs nothing, but it does see the grants
+and the tokens in the responses in transit, so disclose that. Pair it with `claudeTokenRelayFetch` and
+`claude({ subscription })` from `@byos/providers`. Live acceptance by Anthropic is unverified.
+
 `createCodexRelay(options)` returns `{ router, handleUpgrade, close }`: an Express router for the
 status and one-time ticket routes, a WebSocket upgrade handler for the tunnels, and a drain hook.
 The relay forwards only TLS ciphertext to fixed hosts: `auth.openai.com` and `chatgpt.com` by default,

@@ -36,6 +36,12 @@
 .byos-signin-connected { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .byos-signin-connected p { color: var(--byos-success, #1f7a4d); }
 .byos-signin .byos-signin-error { padding: 12px; color: var(--byos-danger, #c2352b); border: 1px solid var(--byos-danger, #c2352b); border-radius: var(--byos-radius, 8px); font-size: 13px; }
+.byos-signin-paste { display: grid; gap: 10px; }
+.byos-signin-paste-label { color: var(--byos-text, #1b1f27); font: 600 13px/1.3 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-signin-paste-hint { margin: 0; color: var(--byos-muted, #5a6272); font-size: 12px; line-height: 1.5; }
+.byos-signin-paste-input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); background: var(--byos-surface-input, #f9fafb); color: var(--byos-text, #1b1f27); font: 400 14px/1.3 var(--byos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.byos-signin-paste-input[aria-invalid="true"] { border-color: var(--byos-danger, #c2352b); }
+.byos-signin-paste-input:disabled { color: var(--byos-faint, #8a92a1); }
 .byos-signin-storage { padding-top: 12px; border-top: 1px solid var(--byos-line, #e2e5eb); }
 .byos-signin-storage label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
 .byos-signin-storage input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: var(--byos-accent, #2f5bd3); }

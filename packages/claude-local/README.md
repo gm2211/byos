@@ -36,3 +36,5 @@ await client.disconnect(); // removes the local tokens
 ```
 
 Account labels come from the token response when Anthropic includes the email, otherwise `Claude subscription`. Tokens never leave the process; callers get account metadata, model ids and generated text. Errors are fixed `ClaudeError` codes without provider text. Do not use this as a credential proxy for a hosted multi-user service.
+
+For a browser app that cannot run Node, see `claude({ subscription })` in `@byos/providers` and `createClaudeTokenRelay` in `@byos/server`: the same OAuth client, with the token grants relayed through the host because Anthropic's token endpoint blocks browser origins.

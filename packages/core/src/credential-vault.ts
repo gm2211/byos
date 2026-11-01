@@ -5,6 +5,10 @@ import { requireStoragePrefix, resolveStorage, safeGet, safeRemove, type ByosSto
  * handshake (disclosed to the user). After that it lives only here, in the browser, and every model
  * call goes browser to provider. Nothing in this vault sends a token anywhere; never add a method
  * that does.
+ *
+ * Claude exception (approved 2026-11-01): Claude's authorization-code exchange and refresh grants
+ * pass through the host's fixed-destination token relay (the token endpoint refuses browser CORS);
+ * the relay neither stores nor logs them. Inference stays browser -> Anthropic.
  */
 
 /** `session`: this tab only. `browser`: remembered on this browser until signed out. */

@@ -1,5 +1,9 @@
 import { createServer, type Server } from 'node:http';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import {
+  CLAUDE_AUTHORIZE_URL, CLAUDE_OAUTH_CLIENT_ID, CLAUDE_OAUTH_SCOPE, CLAUDE_PASTE_REDIRECT_URI, CLAUDE_TOKEN_URL,
+  claudeAuthorizeUrl, parseClaudePastedCode,
+} from '@byos/core';
 import { ClaudeError, checkSignal } from './errors.js';
 
 /**
@@ -7,15 +11,15 @@ import { ClaudeError, checkSignal } from './errors.js';
  * The endpoints, client id and scopes are the ones the Claude CLI uses. They are undocumented but have
  * been stable across CLI versions. Ported from the Skim app's working claude_oauth.rs.
  */
-export const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-export const AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
-export const TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
-export const SCOPE = 'user:profile user:inference';
+export const CLIENT_ID = CLAUDE_OAUTH_CLIENT_ID;
+export const AUTHORIZE_URL = CLAUDE_AUTHORIZE_URL;
+export const TOKEN_URL = CLAUDE_TOKEN_URL;
+export const SCOPE = CLAUDE_OAUTH_SCOPE;
 /** The client only accepts http://localhost:<port>/callback; 127.0.0.1 is rejected as an unsupported redirect URI. */
 export const LOOPBACK_PORT = 54134;
 export const LOOPBACK_PATH = '/callback';
 /** Console page that displays a `CODE#STATE` string for the user to copy back (paste fallback). */
-export const PASTE_REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
+export const PASTE_REDIRECT_URI = CLAUDE_PASTE_REDIRECT_URI;
 
 export type Pkce = { verifier: string; challenge: string; state: string; redirectUri: string };
 export function newPkce(redirectUri: string): Pkce {
@@ -23,14 +27,12 @@ export function newPkce(redirectUri: string): Pkce {
   return { verifier, challenge: createHash('sha256').update(verifier).digest('base64url'), state: randomBytes(32).toString('base64url'), redirectUri };
 }
 export function authorizeUrl(p: Pkce): string {
-  const u = new URL(AUTHORIZE_URL);
-  for (const [k, v] of Object.entries({ code: 'true', client_id: CLIENT_ID, response_type: 'code', redirect_uri: p.redirectUri, scope: SCOPE, code_challenge: p.challenge, code_challenge_method: 'S256', state: p.state })) u.searchParams.set(k, v);
-  return u.href;
+  return claudeAuthorizeUrl({ challenge: p.challenge, state: p.state, redirectUri: p.redirectUri });
 }
 /** Accepts `CODE#STATE` (as the console page shows it) or a bare code. */
 export function parsePastedCode(pasted: string, p: Pkce): string {
-  const [code, state = p.state] = pasted.trim().split('#');
-  if (!code || code.length > 4096 || /\s/.test(code) || state !== p.state) throw new ClaudeError('auth-failed');
+  const code = parseClaudePastedCode(pasted, p.state);
+  if (!code) throw new ClaudeError('auth-failed');
   return code;
 }
 
