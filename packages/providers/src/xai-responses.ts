@@ -74,6 +74,8 @@
  * which is why they are safe to guess at; the request shape, which is not safe to guess at, is not
  * guessed at anywhere.
  */
+import type { ChatEvent, ChatRequest } from '@byos/core';
+import { ProviderRequestError, redactProviderSecrets } from './chat.js';
 import type { CloudEndpoint } from './endpoints.js';
 
 /** A citation Grok reported for its answer, normalized to the `{title, url}` pair every source
@@ -263,4 +265,37 @@ export function parseXaiResponsesPayload(payload: unknown): XaiResponsesResult {
     && (root.incomplete_details?.reason === 'max_output_tokens' || root.incomplete_details?.reason === undefined);
 
   return { text, sources, truncated, usage: usageFrom(root.usage), errorMessage };
+}
+
+/**
+ * `ChatRequest` with `webSearch` on Grok: one non-streaming `/responses` call with the `web_search`
+ * tool (see `parseXaiResponsesPayload` for why it does not stream), surfaced as ChatEvents. Sources
+ * are yielded before the answer text so a live view can show them first. System messages become
+ * `instructions`; the conversation goes as role/content input items.
+ */
+export async function* streamXaiWebSearch(endpoint: CloudEndpoint, request: ChatRequest): AsyncGenerator<ChatEvent> {
+  const response = await fetch(xaiResponsesUrl(endpoint), {
+    method: 'POST',
+    signal: request.signal,
+    redirect: 'error',
+    headers: { Authorization: `Bearer ${endpoint.apiKey}`, 'Content-Type': 'application/json', ...endpoint.headers },
+    body: JSON.stringify({
+      model: request.model,
+      instructions: request.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n'),
+      input: request.messages.filter(m => m.role !== 'system').map(({ role, content }) => ({ role, content })),
+      tools: [{ type: 'web_search' }],
+      include: ['no_inline_citations'],
+    }),
+  });
+  const payload = await response.json().catch(() => undefined);
+  if (!response.ok) {
+    const text = xaiResponsesErrorText(payload);
+    throw new ProviderRequestError(text ? redactProviderSecrets(text, [endpoint.apiKey]) : `The provider answered ${response.status}.`, response.status);
+  }
+  const result = parseXaiResponsesPayload(payload);
+  if (result.errorMessage) throw new ProviderRequestError(redactProviderSecrets(result.errorMessage, [endpoint.apiKey]), 200);
+  for (const source of result.sources) yield { type: 'source', source };
+  if (result.text) yield { type: 'text', text: result.text };
+  if (result.usage) yield { type: 'usage', inputTokens: result.usage.prompt_tokens, outputTokens: result.usage.completion_tokens };
+  yield { type: 'done' };
 }

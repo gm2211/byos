@@ -199,3 +199,21 @@ test('model catalog keeps API-supported rows and marks hidden ones', () => {
   assert.deepEqual(models.map(m => [m.id, !!m.hidden]), [['gpt-5.6-luna', false], ['old', true]]);
   assert.equal(models[0].defaultReasoningEffort, 'low');
 });
+
+test('stream: webSearch adds the web_search tool and yields url_citation sources once', async () => {
+  const token = encodeCodexCredential({ accessToken: 'at-1', refreshToken: 'rt-1', accountId: 'acct-1', expiresAt: Date.now() + 3600_000 });
+  const cite = (url: string, title: string) => ({ type: 'url_citation', url, title });
+  const { fetch, calls } = fakeFetch(() => sse([
+    { type: 'response.output_item.done', item: { type: 'web_search_call', id: 'w1', status: 'completed' } },
+    { type: 'response.output_item.added', item: { type: 'message', id: 'f1', phase: 'final_answer' } },
+    { type: 'response.output_text.delta', item_id: 'f1', delta: 'See the page.' },
+    { type: 'response.output_item.done', item: { type: 'message', id: 'f1', content: [{ type: 'output_text', text: 'See the page.', annotations: [cite('https://track.example/day', 'Track day'), cite('https://track.example/day', 'dup')] }] } },
+    completed,
+  ]));
+  const provider = codex({ fetch, readCredential: () => token, saveCredential: () => {} });
+  assert.equal(provider.webSearch, true);
+  const events = [];
+  for await (const ev of provider.stream(token, { model: 'gpt-5.6-luna', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(ev);
+  assert.deepEqual(events.filter(e => e.type === 'source'), [{ type: 'source', source: { url: 'https://track.example/day', title: 'Track day' } }]);
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)).tools, [{ type: 'web_search' }]);
+});

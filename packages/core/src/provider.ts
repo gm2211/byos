@@ -45,10 +45,20 @@ export type ChatRequest = {
   messages: ChatMessage[];
   effort?: ReasoningEffort;
   signal?: AbortSignal;
+  /**
+   * Let the model search the web with the provider's own built-in search tool, billed to the
+   * user's plan or key. Honoured only by adapters whose `webSearch` is true; others ignore it.
+   * Each page the provider reports reading or citing arrives as a `source` event.
+   */
+  webSearch?: boolean;
 };
+
+/** A web page the provider's search returned or the answer cited. */
+export type WebSource = { url: string; title: string };
 
 export type ChatEvent =
   | { type: 'text'; text: string }
+  | { type: 'source'; source: WebSource }
   | { type: 'reasoning'; text: string }
   | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
   | { type: 'done' };
@@ -58,6 +68,8 @@ export interface ByosProvider {
   displayName: string;
   signIn: SignInMethod[];
   availability(): ProviderAvailability;
+  /** True when `stream` honours `ChatRequest.webSearch` with the provider's own search tool. */
+  webSearch?: boolean;
   /** Always from the provider; never a hard-coded list. */
   listModels(token: string, signal?: AbortSignal): Promise<CatalogModel[]>;
   stream(token: string, request: ChatRequest): AsyncIterable<ChatEvent>;

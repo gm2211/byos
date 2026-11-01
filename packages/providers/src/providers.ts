@@ -9,6 +9,7 @@ import {
   type GrokSubscriptionOptions,
 } from './grok-sign-in.js';
 import { endpointFor, type EndpointOptions } from './endpoints.js';
+import { streamXaiWebSearch } from './xai-responses.js';
 
 /**
  * Ready-made ByosProvider adapters for the three browser-direct providers. Each lists models live
@@ -25,6 +26,8 @@ export function openrouter(options: EndpointOptions = {}): ByosProvider {
     // PKCE runs entirely in the browser: OpenRouter's key exchange answers CORS.
     signIn: [{ kind: 'pkce', handshakeViaSite: false }] satisfies SignInMethod[],
     availability: () => ({ available: true }),
+    // OpenRouter's `web` plugin, billed to the user's OpenRouter credits.
+    webSearch: true,
     listModels: async (token, signal) => toCatalog(await listOpenRouterModels(token, signal)),
     stream: (token, request) => streamChatCompletions(endpointFor('openrouter', token, options), request),
   };
@@ -80,17 +83,20 @@ export function grok(options: GrokProviderOptions = {}): ByosProvider {
     ],
     availability: () => ({ available: true }),
     listModels: (token, signal) => withRetry(token, signal, async key => toCatalog(await listModelsForEndpoint(endpointFor('xai', key), signal))),
+    // Grok searches only through /responses, so a webSearch request takes that path.
+    webSearch: true,
     async *stream(token, request) {
+      const run = (key: string) => request.webSearch ? streamXaiWebSearch(endpointFor('xai', key), request) : streamChatCompletions(endpointFor('xai', key), request);
       const key = await accessToken(token, false, request.signal);
       let started = false;
       try {
-        for await (const event of streamChatCompletions(endpointFor('xai', key), request)) { started = true; yield event; }
+        for await (const event of run(key)) { started = true; yield event; }
         return;
       } catch (error) {
         if (started || !retryable(error, token)) throw error;
       }
       const retryKey = await accessToken(options.subscription?.readCredential() || token, true, request.signal);
-      yield* streamChatCompletions(endpointFor('xai', retryKey), request);
+      yield* run(retryKey);
     },
   };
 }

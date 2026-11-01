@@ -6,7 +6,7 @@
  */
 import { CODEX_ACCOUNT_CATALOG_URL } from '@byos/core';
 import type { CatalogModel, ChatEvent, ChatMessage, ReasoningEffort } from '@byos/core';
-import { iterateSseEvents } from '@byos/providers';
+import { iterateSseEvents, sourcesFromAnnotations } from '@byos/providers';
 import { codexAccountId, isRecord, type CodexCredential, type CodexFetch } from './sign-in.js';
 
 export const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
@@ -36,8 +36,9 @@ function headersFor(credential: CodexCredential, accept: string): Record<string,
   return headers;
 }
 
-/** The Responses body: system messages become `instructions`, the rest the conversation. */
-export function buildCodexResponsesBody(model: string, messages: ChatMessage[], effort?: ReasoningEffort): Record<string, unknown> {
+/** The Responses body: system messages become `instructions`, the rest the conversation. `webSearch`
+ * adds OpenAI's built-in `web_search` tool, which runs on OpenAI's side under the user's plan. */
+export function buildCodexResponsesBody(model: string, messages: ChatMessage[], effort?: ReasoningEffort, webSearch = false): Record<string, unknown> {
   if (!model || model.length > 128 || /\s/.test(model)) throw new CodexRequestError('Choose a valid ChatGPT model first.');
   const instructions = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const input = messages.filter(m => m.role !== 'system').map(m => ({
@@ -51,7 +52,7 @@ export function buildCodexResponsesBody(model: string, messages: ChatMessage[], 
     model,
     instructions,
     input,
-    tools: [],
+    tools: webSearch ? [{ type: 'web_search' }] : [],
     tool_choice: 'auto',
     parallel_tool_calls: false,
     store: false,
@@ -100,6 +101,7 @@ export async function* readCodexStream(response: Response, secrets: string[], si
   const phaseById = new Map<string, Phase>();
   const items: Array<{ phase: Phase; text: string }> = [];
   let streamed = 0, events = 0, total = 0, completedText = '', completed = false;
+  const seen = new Set<string>();
   try {
     for await (const event of iterateSseEvents(reader)) {
       signal?.throwIfAborted();
@@ -123,6 +125,12 @@ export async function* readCodexStream(response: Response, secrets: string[], si
       if (type === 'response.output_item.added' && item?.type === 'message' && typeof item.id === 'string') {
         phaseById.set(item.id, phaseOf(item.phase));
       } else if (type === 'response.output_item.done' && item?.type === 'message') {
+        // Web search citations ride on the answer's output_text parts as url_citation annotations.
+        if (Array.isArray(item.content)) {
+          for (const part of item.content) {
+            if (isRecord(part)) for (const source of sourcesFromAnnotations(part.annotations, seen)) yield { type: 'source', source };
+          }
+        }
         const text = messageText(item);
         const phase = phaseOf(item.phase) !== 'none' ? phaseOf(item.phase) : typeof item.id === 'string' ? phaseById.get(item.id) ?? 'none' : 'none';
         if (text) items.push({ phase, text });
