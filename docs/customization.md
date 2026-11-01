@@ -70,6 +70,30 @@ app.use(claudeRelay.router); // before app.use(express.json())
 
 Limits to state in the host's UI and docs: sign-in is paste-code only (no popup or redirect); the host's server sees the code exchange and each refresh, and the tokens in those responses, in transit (it stores and logs nothing); the relay accepts only the Claude Code client's two grant shapes, 4 KiB bodies, same-origin browser calls, 20 requests a minute per account or address and 300 overall; and live acceptance of the paste-code redirect by Anthropic is unverified. `claude({ subscriptionsPaused: true })` still removes the sign-in method and refuses subscription credentials.
 
+## Grok subscription refresh
+
+Grok sign-in is a device-code flow whose access token lasts about an hour. To keep it alive, store the encoded credential (not just the access token) and pass `subscription` to `grok()`. The refresh grant goes browser to `auth.x.ai` inside browser TLS, through the ciphertext `xai-auth` destination of the codex relay; it never crosses a plaintext host route.
+
+```ts
+import { createCodexTlsFetch } from '@byos/browser-tls';
+import { grok, grokCredentialFromDeviceTokens, grokVaultBinding } from '@byos/providers';
+
+// The codex relay must allow the xai-auth destination: createCodexRelay({ destinations: ['auth', 'responses', 'xai-auth'], ... }).
+const codexFetch = createCodexTlsFetch({ /* relayBasePath, engine, session binding as for Codex */ });
+const provider = grok({
+  subscription: {
+    tokenFetch: codexFetch,
+    namespace: 'my-site', // Web Lock name suffix
+    ...grokVaultBinding(vault, 'grok'), // readCredential / saveCredential over a core vault
+  },
+});
+
+// After the device-code broker returns tokens, store the whole record so the refresh grant is kept.
+vault.store('grok', grokCredentialFromDeviceTokens(status.tokens), 'session');
+```
+
+Use your own `readCredential`/`saveCredential` instead of `grokVaultBinding` if the vault holds the record as one string. The Node equivalent (Keychain, device-code sign-in, direct `auth.x.ai`) is `@byos/grok-local`. Limits: whether xAI rotates refresh tokens is unconfirmed (refresh is single-flight either way); a 403 is never retried because some SuperGrok tiers answer 403 while signed in; a refresh answered 400 or 401 asks the user to reconnect, any other failure keeps the current access token until it expires. Live xAI behavior is unverified.
+
 ## Storage and session lifetime
 
 Use a stable, unique prefix for each application sharing an origin. Preserve existing prefixes during updates so saved accounts keep working. Credentials default to session-only storage; remember them only after an explicit user choice.

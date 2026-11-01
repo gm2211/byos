@@ -19,7 +19,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/claude-local` | Claude Pro/Max subscription sign-in for local Node apps; Keychain, loopback OAuth with a paste-code fallback, direct HTTPS |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
-| `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in) plus credential-free on-device catalog and native bridge adapters |
+| `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in and Grok subscription refresh) plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
 | `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
