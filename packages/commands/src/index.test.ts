@@ -205,6 +205,24 @@ test('controller offers Ask after commands, or first for a question, and shows t
   assert.equal(state.history.length, 0);
 });
 
+test('an answer can replace earlier turns with its own history', async () => {
+  const replies: Array<Awaited<ReturnType<AskBinding['ask']>>> = [
+    { kind: 'answer', text: 'first' },
+    { kind: 'answer', text: 'second', history: [{ role: 'user', content: 'q1' }, { role: 'assistant', content: 'first (corrected)' }] },
+    { kind: 'answer', text: 'third' },
+  ];
+  const seen: number[] = [];
+  const palette = createPaletteController({ registry: createCommandRegistry([{ id: 's', commands: () => SKIM }]), schedule: sync, ask: { label: 'Ask', ask: async (_q, { history }) => { seen.push(history.length); return replies.shift()!; } } });
+  palette.open();
+  await palette.ask('q1');
+  assert.deepEqual(palette.getState().history.map(t => t.content), ['q1', 'first']);
+  await palette.ask('q2');
+  assert.deepEqual(palette.getState().history.map(t => t.content), ['q1', 'first (corrected)', 'q2', 'second']);
+  await palette.ask('q3');
+  assert.deepEqual(seen, [0, 2, 4]);
+  assert.deepEqual(palette.getState().history.map(t => t.content), ['q1', 'first (corrected)', 'q2', 'second', 'q3', 'third']);
+});
+
 test('Ask results can run a command, filter the list, or hand off an action', async () => {
   const ran: string[] = [];
   const registry = createCommandRegistry([{ id: 's', commands: () => SKIM.map(c => ({ ...c, run: () => { ran.push(c.id); } })) }]);
