@@ -13,6 +13,30 @@ export class ProviderRequestError extends Error {
   }
 }
 
+export type ProviderErrorKind = 'auth' | 'quota' | 'aborted' | 'unavailable';
+
+const PROVIDER_ERROR_MESSAGES: Record<ProviderErrorKind, string> = {
+  auth: 'The provider did not accept this sign-in or key. Reconnect it, then try again.',
+  quota: 'The provider refused the request because of credits or rate limits. Check your account, or choose another provider.',
+  aborted: 'The request was cancelled.',
+  unavailable: 'The provider could not complete this request. Try again later.',
+};
+
+/** Sorts a failed provider call for the UI. 401/403 are `auth` (reconnect), 402/429 `quota`, a cancelled
+ * fetch (`AbortError`, or an `AbortSignal.timeout` `TimeoutError`) `aborted`, everything else `unavailable`.
+ * The status comes from `ProviderRequestError` or any error carrying a numeric `status` (such as
+ * `ClaudeAuthError`). `message` is fixed text chosen by `kind`: never the provider's own words, which can
+ * echo request data. */
+export function classifyProviderError(error: unknown): { kind: ProviderErrorKind; message: string } {
+  const name = error && typeof error === 'object' ? (error as { name?: unknown }).name : undefined;
+  const status = error && typeof error === 'object' ? (error as { status?: unknown }).status : undefined;
+  const kind: ProviderErrorKind = name === 'AbortError' || name === 'TimeoutError' ? 'aborted'
+    : status === 401 || status === 403 ? 'auth'
+    : status === 402 || status === 429 ? 'quota'
+    : 'unavailable';
+  return { kind, message: PROVIDER_ERROR_MESSAGES[kind] };
+}
+
 /** Reads an error out of a failure body. xAI puts a bare string in `error`; others an object. */
 export function providerErrorText(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') return undefined;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // Built output: sources use NodeNext `.js` imports.
-import { claudeAcceptsTemperature, endpointFor, grok, groq, isChatModel, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
+import { classifyProviderError, listModelsForEndpoint, listOpenRouterModels, OpenRouterAuthenticationError, ProviderRequestError, claudeAcceptsTemperature, endpointFor, grok, groq, isChatModel, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
 
 type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response): Call[] {
@@ -221,4 +221,32 @@ test('claudeAcceptsTemperature is false for Claude 4.7+ and the 5-series, true f
   for (const id of ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'claude-sonnet-4-20250514', 'claude-opus-4-1-20250805', 'claude-sonnet-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-6', 'Claude-Sonnet-4-6']) assert.equal(claudeAcceptsTemperature(id), true, id);
   for (const id of ['claude-opus-4-7', 'claude-sonnet-4-8', 'claude-opus-4-10', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-5-sonnet', 'claude-sonnet-6']) assert.equal(claudeAcceptsTemperature(id), false, id);
   for (const id of ['', 'claude', 'claude-sonnet', 'gpt-4', 'grok-4.7', 'my-claude-4-5']) assert.equal(claudeAcceptsTemperature(id), false, id);
+});
+
+test('model discovery failures carry the HTTP status and keep their message', async () => {
+  fakeFetch(() => Response.json({ error: { message: 'Insufficient credits for sk-secret-key' } }, { status: 402 }));
+  await assert.rejects(listModelsForEndpoint({ ...endpointFor('groq', 'sk-secret-key', {}) }), (e: ProviderRequestError) => e instanceof ProviderRequestError && e.status === 402 && e.message.includes('Insufficient credits') && !e.message.includes('sk-secret-key'));
+  fakeFetch(() => Response.json({}, { status: 503 }));
+  await assert.rejects(listModelsForEndpoint(endpointFor('groq', 'k', {})), (e: ProviderRequestError) => e.status === 503 && e.message === 'Could not load models.');
+  await assert.rejects(listOpenRouterModels('k'), (e: ProviderRequestError) => e.status === 503 && e.message === 'Could not load OpenRouter models.');
+  fakeFetch(() => Response.json({}, { status: 403 }));
+  await assert.rejects(listOpenRouterModels('k'), (e: OpenRouterAuthenticationError) => e instanceof ProviderRequestError && e.name === 'OpenRouterAuthenticationError' && e.status === 403 && e.message === 'OpenRouter rejected this key. Reconnect your OpenRouter account.');
+});
+
+test('classifyProviderError sorts failures and never returns provider text', () => {
+  const secret = 'sk-secret-key';
+  const kind = (e: unknown) => classifyProviderError(e).kind;
+  assert.equal(kind(new ProviderRequestError(secret, 401)), 'auth');
+  assert.equal(kind(new ProviderRequestError(secret, 403)), 'auth');
+  assert.equal(kind(new ProviderRequestError(secret, 402)), 'quota');
+  assert.equal(kind(new ProviderRequestError(secret, 429)), 'quota');
+  assert.equal(kind(new ProviderRequestError(secret, 500)), 'unavailable');
+  assert.equal(kind(new OpenRouterAuthenticationError()), 'auth');
+  assert.equal(kind(Object.assign(new Error(secret), { status: 401 })), 'auth');
+  assert.equal(kind(new DOMException('x', 'AbortError')), 'aborted');
+  assert.equal(kind(new DOMException('x', 'TimeoutError')), 'aborted');
+  assert.equal(kind(new TypeError('fetch failed')), 'unavailable');
+  assert.equal(kind('boom'), 'unavailable');
+  assert.equal(kind(undefined), 'unavailable');
+  for (const e of [new ProviderRequestError(secret, 401), new ProviderRequestError(secret, 429), new Error(secret)]) assert.ok(!classifyProviderError(e).message.includes(secret));
 });
