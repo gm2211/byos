@@ -86,7 +86,8 @@
       "core",
       "providers",
       "chatgpt-local",
-      "claude-local"
+      "claude-local",
+      "grok-local"
     ],
     "output": "mac/Sidecar/byos",
     "namePrefix": "byos-",
