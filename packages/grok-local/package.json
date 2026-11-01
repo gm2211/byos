@@ -1,0 +1,32 @@
+{
+  "name": "@byos/grok-local",
+  "version": "0.1.0",
+  "description": "Node-only Grok (xAI) subscription client: device-code sign-in, Keychain storage, direct HTTPS refresh.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "node": "./dist/index.js"
+    }
+  },
+  "byos": {
+    "runtime": "node"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@byos/core": "file:../core",
+    "@napi-rs/keyring": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
