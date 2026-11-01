@@ -2,7 +2,7 @@
 
 A **Node-only** Claude Pro/Max subscription client. The user signs in with their Claude account (OAuth 2.0 authorization code + PKCE), the tokens live in the macOS Keychain, and model-list and streaming Messages requests go straight to `api.anthropic.com` over verified HTTPS. No Claude CLI, API key, tunnel or relay is involved. It mirrors `@byos/chatgpt-local`.
 
-Claude subscription sign-in is supported. It works the way the Claude CLI's own login does: the public Claude Code OAuth client (`9d1c250a-e61b-44d9-88ed-5944d1962f5e`), scopes `user:profile user:inference`, `https://claude.ai/oauth/authorize` and `https://console.anthropic.com/v1/oauth/token`. These endpoints are undocumented but have been stable across CLI versions; the flow is ported from the Skim app, where it signs in successfully. Synthetic tests here establish the request shapes, not live account acceptance. Eligibility and acceptable use follow Anthropic's current terms for your plan.
+Claude subscription sign-in is supported. It works the way the Claude CLI's own login does: the public Claude Code OAuth client (`9d1c250a-e61b-44d9-88ed-5944d1962f5e`), scopes `user:profile user:inference`, `https://claude.com/cai/oauth/authorize` and `https://platform.claude.com/v1/oauth/token`. These endpoints come from the Claude Code CLI's embedded strings (2.1.316), are undocumented and can change; re-check with `strings $(readlink -f $(which claude)) | grep oauth`; the flow is ported from the Skim app, where it signs in successfully. Synthetic tests here establish the request shapes, not live account acceptance. Eligibility and acceptable use follow Anthropic's current terms for your plan.
 
 ## Flows
 

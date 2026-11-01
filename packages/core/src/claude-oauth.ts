@@ -3,8 +3,10 @@
  * shared by the browser sign-in (@byos/providers), the host token relay (@byos/server) and the Node
  * client (@byos/claude-local). Pure functions only: no node: imports, so it runs in browsers.
  *
- * The endpoints, client id and scope are the public Claude Code client's. They are undocumented but
- * have been stable across CLI versions.
+ * The endpoints, client id and scope are the public Claude Code client's (CLI 2.1.316 embedded strings).
+ * They are undocumented and can change; re-check with
+ * `strings $(readlink -f $(which claude)) | grep oauth`. claude.com 307-redirects the authorize URL to
+ * claude.ai; calling claude.ai/oauth/authorize directly now answers "Invalid request format".
  *
  * TOKEN RULE (Claude exception, approved 2026-11-01): the authorization-code exchange and each
  * refresh grant pass through the host's fixed-destination token relay, because the token endpoint
@@ -12,11 +14,11 @@
  * browser -> api.anthropic.com.
  */
 export const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-export const CLAUDE_AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
-export const CLAUDE_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
+export const CLAUDE_AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize';
+export const CLAUDE_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
 export const CLAUDE_OAUTH_SCOPE = 'user:profile user:inference';
-/** Console page that displays a `CODE#STATE` string for the user to copy back. Live acceptance is unverified. */
-export const CLAUDE_PASTE_REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
+/** platform.claude.com page that displays a `CODE#STATE` string for the user to copy back. Live acceptance is unverified. */
+export const CLAUDE_PASTE_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
 /** Beta flags a subscription Bearer token needs. */
 export const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20,claude-code-20250219';
 /** Subscription tokens are only honored for requests that open with this system block. */

@@ -4,7 +4,7 @@ Server half of the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
 `createClaudeTokenRelay(options)` returns `{ router, handle }`: a fixed-destination relay for Anthropic's OAuth
-token endpoint (`https://console.anthropic.com/v1/oauth/token`), which refuses browser origins. `GET
+token endpoint (`https://platform.claude.com/v1/oauth/token`), which refuses browser origins. `GET
 ${basePath}/status` reports `{ enabled }`; `POST ${basePath}/token` accepts only the Claude Code client's
 authorization-code exchange or refresh grant (strict allowlist, 4 KiB, `application/json`), forwards it with a 15 s
 timeout and no redirects, and returns only `access_token`, `refresh_token`, `expires_in`, `token_type`, `scope` and
