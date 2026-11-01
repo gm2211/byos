@@ -12,7 +12,8 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `listOpenRouterModels`, `listModelsForEndpoint`, `readOpenRouterKeyInfo`: model discovery. Lists
   always come from the provider, never a hard-coded table. `listModelsForEndpoint` (Grok, Groq,
   Hugging Face) keeps the order the provider returns and drops image, video, audio and embedding
-  models such as `grok-imagine-image` (`isChatModel`).
+  models such as `grok-imagine-image`, Imagen, Nano Banana, Veo and Lyria (`isChatModel`).
+- `claudeAcceptsTemperature(model)`: false for Claude 4.7 and later and every 5-series model, which answer a `temperature` field with a 400; true for Claude 3.x and 4.0-4.6 (an unrecognised id is false, so the API default applies). `ChatRequest` has no temperature field; use this when your own request code sets one.
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
   its web_search tool exists.
 

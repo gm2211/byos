@@ -97,7 +97,7 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
 /** Id words that mark a model as image, video, audio, embedding or moderation rather than text chat,
  * such as xAI's `grok-imagine-image` and `grok-imagine-video`. OpenAI-compatible `/models` lists carry
  * no modality, so the id is all there is to go on. */
-const NON_CHAT_MODEL_WORDS = new Set(['imagine', 'image', 'video', 'embed', 'embedding', 'tts', 'whisper', 'dall', 'moderation', 'transcribe', 'sora', 'realtime', 'audio', 'speech']);
+const NON_CHAT_MODEL_WORDS = new Set(['imagine', 'image', 'video', 'embed', 'embedding', 'tts', 'whisper', 'dall', 'moderation', 'transcribe', 'sora', 'realtime', 'audio', 'speech', 'imagen', 'banana', 'veo', 'lyria']);
 
 /** False for ids of models that cannot answer a chat request (see NON_CHAT_MODEL_WORDS). */
 export function isChatModel(id: string): boolean {

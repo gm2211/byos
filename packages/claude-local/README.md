@@ -11,7 +11,7 @@ Claude subscription sign-in is supported. It works the way the Claude CLI's own 
 
 ## Requests
 
-A subscription token is a Bearer token sent with `anthropic-beta: oauth-2025-04-20,claude-code-20250219`, and the request's first system block must be `You are Claude Code, Anthropic's official CLI for Claude.` (`generate` adds it before your own instructions). 5-series models think by default, so `generate` asks for low effort and keeps `max_tokens` at 4096 or more so the answer is not starved. Access tokens refresh on demand; the rotated refresh token is persisted under a process lock. A rejected refresh deletes the stored tokens (`reconnect-required`).
+A subscription token is a Bearer token sent with `anthropic-beta: oauth-2025-04-20,claude-code-20250219`, and the request's first system block must be `You are Claude Code, Anthropic's official CLI for Claude.` (`generate` adds it before your own instructions). 5-series models think by default, so `generate` asks for low effort and keeps `max_tokens` at 4096 or more so the answer is not starved. Access tokens refresh on demand; the rotated refresh token is persisted under a process lock. A rejected refresh deletes the stored tokens (`reconnect-required`). When the API answers a request with 401 (a token revoked or rotated before its expiry), `generate` and `listModels` force one refresh and retry once; a refresh answered with 400 or 401 is `reconnect-required`, and a second 401 after a good refresh is too.
 
 ```ts
 import { createClaudeClient, ClaudeError } from '@byos/claude-local';

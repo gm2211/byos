@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // Built output: sources use NodeNext `.js` imports.
-import { endpointFor, grok, groq, isChatModel, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
+import { claudeAcceptsTemperature, endpointFor, grok, groq, isChatModel, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
 
 type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response): Call[] {
@@ -126,7 +126,7 @@ test('model lists with created timestamps give the same order', async () => {
 
 test('non-chat models are recognized by id words, not substrings', () => {
   for (const id of ['grok-4.7', 'grok-build-0.1', 'llama-3.2-11b-vision-instruct', 'gpt-5', 'qwen3-32b']) assert.equal(isChatModel(id), true, id);
-  for (const id of ['grok-imagine-image', 'grok-imagine-video-1.5', 'dall-e-3', 'gpt-image-1', 'text-embedding-3-small', 'whisper-large-v3', 'playai-tts', 'omni-moderation-latest']) assert.equal(isChatModel(id), false, id);
+  for (const id of ['grok-imagine-image', 'grok-imagine-video-1.5', 'dall-e-3', 'gpt-image-1', 'text-embedding-3-small', 'whisper-large-v3', 'playai-tts', 'omni-moderation-latest', 'imagen-4.0-generate-001', 'gemini-2.5-flash-image-preview', 'nano-banana-pro', 'veo-3.0-generate-preview', 'lyria-realtime']) assert.equal(isChatModel(id), false, id);
 });
 
 test('provider model discovery forwards cancellation signal', async () => {
@@ -215,4 +215,10 @@ test('orderServices lists subscriptions first, then OpenRouter, Groq, Hugging Fa
   assert.deepEqual(orderServices(ids, keyOf), ['claude', 'chatgpt', 'grok', 'openrouter', 'groq', 'huggingface', 'other']);
   assert.deepEqual(orderServices(ids, keyOf, ['openrouter', 'grok']), ['openrouter', 'grok', 'huggingface', 'other', 'groq', 'chatgpt', 'claude']);
   assert.equal(NOT_RECOMMENDED_REASON.claude, undefined);
+});
+
+test('claudeAcceptsTemperature is false for Claude 4.7+ and the 5-series, true for older Claude', () => {
+  for (const id of ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'claude-sonnet-4-20250514', 'claude-opus-4-1-20250805', 'claude-sonnet-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-6', 'Claude-Sonnet-4-6']) assert.equal(claudeAcceptsTemperature(id), true, id);
+  for (const id of ['claude-opus-4-7', 'claude-sonnet-4-8', 'claude-opus-4-10', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-5-sonnet', 'claude-sonnet-6']) assert.equal(claudeAcceptsTemperature(id), false, id);
+  for (const id of ['', 'claude', 'claude-sonnet', 'gpt-4', 'grok-4.7', 'my-claude-4-5']) assert.equal(claudeAcceptsTemperature(id), false, id);
 });
