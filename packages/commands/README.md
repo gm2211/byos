@@ -60,13 +60,13 @@ A page that inlines its client code in one classic `<script>` (no modules) can i
 
 ```ts
 type AskResult =
-  | { kind: 'answer'; text: string; data?: unknown; commands?: Command[] } // stays open, multi-turn
+  | { kind: 'answer'; text: string; data?: unknown; commands?: Command[]; history?: AskTurn[] } // stays open, multi-turn
   | { kind: 'run'; commandId: string }                                      // run one of the palette's commands
   | { kind: 'filter'; commandIds: string[]; message?: string }              // narrow the list
   | { kind: 'action'; perform: () => void };                                // close and hand off
 ```
 
-`ask` receives the earlier turns and an `AbortSignal`. Throw an `Error` with a message the person can act on; the palette puts their question back with that message.
+`ask` receives the earlier turns and an `AbortSignal`. An `answer` may carry `history` to replace the earlier turns, for when the reply corrected one of them (for example to rewrite an earlier assistant reply in place). The palette then appends the asked question and the new answer to that history; without it the existing history is kept. Throw an `Error` with a message the person can act on; the palette puts their question back with that message.
 
 ## Credential boundary
 
