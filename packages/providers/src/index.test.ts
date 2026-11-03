@@ -335,3 +335,82 @@ test('Grok web search reports a refusal with its status and redacts the key', as
     for await (const _ of grok().stream('xai-secret', { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) { /* drain */ }
   }, (error: Error & { status?: number }) => error.message === 'bad key [redacted]' && error.status === 401);
 });
+
+function sseResponse(lines: string[]): Response {
+  return new Response(new Blob([lines.map(line => `${line}\n\n`).join('')]).stream(), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+test('Grok web search streams each search step live and takes the answer from response.completed', async () => {
+  const completed = { id: 'resp_1', status: 'completed', output: [{ type: 'web_search_call', id: 'ws1' }, { type: 'message', content: [{ type: 'output_text', text: 'Answer', annotations: [{ url: 'https://track.example/day', title: '1' }] }] }], usage: { input_tokens: 5, output_tokens: 2 } };
+  const calls = fakeFetch(() => sseResponse([
+    'data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}',
+    'data: {"type":"response.output_item.added","item":{"type":"web_search_call","id":"ws1","status":"in_progress"}}',
+    'data: {"type":"response.output_item.added","item":{"type":"web_search_call","id":"ws1","action":{"type":"search","query":"VIR track day 2027"}}}',
+    'data: {"type":"response.output_item.added","item":{"type":"web_search_call","id":"ws2","action":{"type":"open_page","url":"https://vir.example/events"}}}',
+    'data: {"type":"response.web_search_call.searching","item_id":"ws1"}',
+    'data: not json',
+    `data: ${JSON.stringify({ type: 'response.completed', response: completed })}`,
+  ]));
+  const events = [];
+  for await (const event of grok().stream('xai-key', { model: 'grok-4', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(event);
+  assert.deepEqual(events, [
+    { type: 'search' },
+    { type: 'search', query: 'VIR track day 2027' },
+    { type: 'search', url: 'https://vir.example/events' },
+    { type: 'source', source: { url: 'https://track.example/day', title: 'track.example' } },
+    { type: 'text', text: 'Answer' },
+    { type: 'usage', inputTokens: 5, outputTokens: 2 },
+    { type: 'done' },
+  ]);
+  assert.equal(JSON.parse(String(calls[0].init?.body)).stream, true);
+});
+
+test('Grok web search reads the stored response back when the stream drops mid-run', async () => {
+  let gets = 0;
+  const calls = fakeFetch(call => {
+    if (call.init?.method === 'POST') {
+      const body = new ReadableStream({
+        pulls: 0,
+        pull(controller) {
+          if (this.pulls++ === 0) controller.enqueue(new TextEncoder().encode('data: {"type":"response.created","response":{"id":"resp_9"}}\n\n'));
+          else controller.error(new TypeError('Load failed'));
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+    gets++;
+    return new Response(JSON.stringify(gets === 1 ? { status: 'in_progress' } : { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Late answer' }] }] }));
+  });
+  const { streamXaiWebSearch, endpointFor: ep } = await import('../dist/index.js');
+  const events = [];
+  const realTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((fn: () => void) => realTimeout(fn, 0)) as typeof setTimeout;
+  try {
+    for await (const event of streamXaiWebSearch(ep('xai', 'xai-key'), { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) events.push(event);
+  } finally { globalThis.setTimeout = realTimeout; }
+  assert.deepEqual(events, [{ type: 'text', text: 'Late answer' }, { type: 'done' }]);
+  assert.equal(calls[1].url, 'https://api.x.ai/v1/responses/resp_9');
+  assert.equal(gets, 2);
+});
+
+test('Grok web search without a response id reports the dropped stream', async () => {
+  fakeFetch(() => sseResponse(['data: {"type":"response.output_item.added","item":{"type":"web_search_call","id":"a"}}']));
+  await assert.rejects(async () => {
+    for await (const _ of grok().stream('xai-key', { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) { /* drain */ }
+  }, /without an answer/);
+});
+
+test('Claude reports each web search query once its input has streamed', async () => {
+  const { claude } = await import('../dist/index.js');
+  fakeFetch(() => sse([
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"t1","name":"web_search","input":{}}}',
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"query\\": \\"VIR "}}',
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"2027\\"}"}}',
+    'data: {"type":"content_block_stop","index":0}',
+    'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"ok"}}',
+    'data: {"type":"content_block_stop","index":1}',
+  ]));
+  const events = [];
+  for await (const event of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(event);
+  assert.deepEqual(events, [{ type: 'search', query: 'VIR 2027' }, { type: 'text', text: 'ok' }, { type: 'done' }]);
+});

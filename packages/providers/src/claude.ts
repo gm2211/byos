@@ -176,14 +176,16 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   }
   let inputTokens: number | undefined;
   const seen = new Set<string>();
+  const searches = new Map<unknown, string>();
   const reader = response.body.getReader();
   try {
     for await (const event of iterateSseEvents(reader)) {
       if (event.type !== 'data') continue;
       let data: {
         type?: string;
-        delta?: { type?: string; text?: unknown; thinking?: unknown; citation?: unknown };
-        content_block?: { type?: unknown; content?: unknown };
+        index?: unknown;
+        delta?: { type?: string; text?: unknown; thinking?: unknown; citation?: unknown; partial_json?: unknown };
+        content_block?: { type?: unknown; content?: unknown; name?: unknown };
         message?: { usage?: { input_tokens?: unknown } };
         usage?: { output_tokens?: unknown };
         error?: unknown;
@@ -191,6 +193,17 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
       try { data = JSON.parse(event.data); } catch { continue; }
       if (data.type === 'error') throw new ProviderRequestError(safeProviderErrorText(data, key) ?? 'Claude stopped with an error.', 200);
       if (data.type === 'message_start' && typeof data.message?.usage?.input_tokens === 'number') inputTokens = data.message.usage.input_tokens;
+      // A search Claude starts is a server_tool_use block whose input (the query) streams as JSON.
+      if (data.type === 'content_block_start' && data.content_block?.type === 'server_tool_use' && data.content_block.name === 'web_search') searches.set(data.index, '');
+      if (data.type === 'content_block_delta' && data.delta?.type === 'input_json_delta' && searches.has(data.index) && typeof data.delta.partial_json === 'string') {
+        searches.set(data.index, (searches.get(data.index) ?? '') + data.delta.partial_json);
+      }
+      if (data.type === 'content_block_stop' && searches.has(data.index)) {
+        let query: unknown;
+        try { query = (JSON.parse(searches.get(data.index) || '{}') as { query?: unknown }).query; } catch { /* no query shown */ }
+        searches.delete(data.index);
+        yield typeof query === 'string' && query.trim() ? { type: 'search', query: query.trim().slice(0, 400) } : { type: 'search' };
+      }
       // A finished search arrives whole as a web_search_tool_result block (or its error object).
       if (data.type === 'content_block_start' && data.content_block?.type === 'web_search_tool_result') {
         const results = data.content_block.content;

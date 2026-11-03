@@ -122,6 +122,13 @@ export async function* readCodexStream(response: Response, secrets: string[], si
       if (item && ['function_call', 'custom_tool_call', 'mcp_call'].includes(String(item.type))) {
         throw new CodexRequestError('ChatGPT returned an unsupported tool request.');
       }
+      if (type === 'response.output_item.done' && item?.type === 'web_search_call') {
+        // OpenAI reports each finished search step with its query (or the page it opened).
+        const action = isRecord(item.action) ? item.action : {};
+        const query = typeof action.query === 'string' && action.query.trim() ? action.query.trim().slice(0, 400) : undefined;
+        const url = typeof action.url === 'string' && /^https?:\/\//i.test(action.url) ? action.url : undefined;
+        yield { type: 'search', ...(query ? { query } : {}), ...(url ? { url } : {}) };
+      }
       if (type === 'response.output_item.added' && item?.type === 'message' && typeof item.id === 'string') {
         phaseById.set(item.id, phaseOf(item.phase));
       } else if (type === 'response.output_item.done' && item?.type === 'message') {
