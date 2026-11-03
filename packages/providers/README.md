@@ -43,9 +43,13 @@ token. In a browser, pass `claude({ subscription: { tokenFetch, readCredential, 
 method, and the stored credential (`claude-subscription:` + base64url JSON) is refreshed near expiry under a Web Lock
 and once more after a 401.
 
-- `beginClaudeSignIn()` returns `{ url, attempt }` (claude.ai authorize URL with S256 PKCE; the attempt expires after
-  20 minutes). `completeClaudeSignIn(tokenFetch, attempt, pasted, signal?)` parses `CODE#STATE` (or a bare code),
-  exchanges it, and returns the encoded credential. Errors are `ClaudeAuthError` / `ClaudeReconnectRequiredError`
+- `beginClaudeSignIn(now?, { keepUntilCancelled? })` returns `{ url, attempt }` (claude.ai authorize URL with S256
+  PKCE; the attempt expires after 20 minutes unless `keepUntilCancelled`, which lasts until the host drops it).
+  `completeClaudeSignIn(tokenFetch, attempt, pasted, signal?)` parses `CODE#STATE`, a bare code or the whole callback
+  URL, exchanges it, and returns the encoded credential.
+- Keep the attempt until the user finishes or cancels: Claude's emailed sign-in link opens in the system browser, so
+  users leave the page mid-sign-in. `encodeClaudeSignInAttempt` / `decodeClaudeSignInAttempt` store it across a reload,
+  and `claudeSignInUrl(attempt)` reopens the same attempt. Beginning a new one would make an already copied code fail. Errors are `ClaudeAuthError` / `ClaudeReconnectRequiredError`
   (`status` 401) with fixed text, never provider text.
 - `claudeTokenRelayFetch({ path })` is the `tokenFetch` for a host that mounts `createClaudeTokenRelay`
   (`@byos/server`): it carries only Anthropic's token URL and POSTs the same body to the host's same-origin `path`.

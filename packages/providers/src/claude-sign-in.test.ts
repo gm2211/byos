@@ -3,6 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   beginClaudeSignIn,
+  claudeSignInUrl,
+  decodeClaudeSignInAttempt,
+  encodeClaudeSignInAttempt,
   claude,
   claudeNeedsRefresh,
   ClaudeAuthError,
@@ -332,4 +335,15 @@ test('a paused host refuses encoded subscription credentials', async () => {
   const v = vault(null);
   const provider = claude({ subscriptionsPaused: true, subscription: { tokenFetch: fetch, readCredential: v.read, saveCredential: v.save } });
   await assert.rejects(() => provider.listModels(credential()), /paused/);
+});
+
+test('a kept attempt survives a reload, reopens the same URL and does not expire', async () => {
+  const { url, attempt } = await beginClaudeSignIn(0, { keepUntilCancelled: true });
+  const restored = decodeClaudeSignInAttempt(encodeClaudeSignInAttempt(attempt));
+  assert.deepEqual(restored, attempt);
+  assert.equal(await claudeSignInUrl(restored!), url);
+  assert.equal(decodeClaudeSignInAttempt('claude-sign-in-attempt:bm9wZQ'), undefined);
+  assert.equal(decodeClaudeSignInAttempt('something-else'), undefined);
+  const { fetch } = tokenFetch(() => json(200, { access_token: 'a', refresh_token: 'r', expires_in: 60 }));
+  assert.ok(await completeClaudeSignIn(fetch, restored!, `code#${attempt.state}`, undefined, 7 * 24 * 3600_000));
 });
