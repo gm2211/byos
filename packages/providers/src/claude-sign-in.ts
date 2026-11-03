@@ -30,7 +30,12 @@ const DEFAULT_LIFETIME_SECONDS = 8 * 3600;
 const REFRESH_WINDOW_MS = 5 * 60_000;
 
 export type ClaudeCredential = { accessToken: string; refreshToken?: string; expiresAt: number; label?: string };
-export type ClaudeSignInAttempt = { verifier: string; state: string; createdAt: number };
+/**
+ * One sign-in in flight. `keepUntilCancelled` attempts never expire on their own: the host keeps
+ * them (for example with `encodeClaudeSignInAttempt` in session storage) until the user finishes or
+ * cancels, so leaving for an email sign-in link and coming back still finds the paste box.
+ */
+export type ClaudeSignInAttempt = { verifier: string; state: string; createdAt: number; keepUntilCancelled?: boolean };
 
 /** Fixed text only; never anything the provider or the relay said. */
 export class ClaudeAuthError extends Error {
@@ -183,13 +188,48 @@ function credentialFromTokens(value: Record<string, unknown>, previous?: ClaudeC
   };
 }
 
-/** Step 1: build the claude.ai authorization URL and the one-time attempt the host keeps until step 2. */
-export async function beginClaudeSignIn(now = Date.now()): Promise<{ url: string; attempt: ClaudeSignInAttempt }> {
+/**
+ * Step 1: build the claude.ai authorization URL and the one-time attempt the host keeps until step 2.
+ * Pass `keepUntilCancelled` for an attempt that does not expire after 20 minutes.
+ */
+export async function beginClaudeSignIn(
+  now = Date.now(),
+  options: { keepUntilCancelled?: boolean } = {},
+): Promise<{ url: string; attempt: ClaudeSignInAttempt }> {
   const verifier = toBase64url(crypto.getRandomValues(new Uint8Array(32)));
   const state = toBase64url(crypto.getRandomValues(new Uint8Array(32)));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  const url = claudeAuthorizeUrl({ challenge: toBase64url(new Uint8Array(digest)), state, redirectUri: CLAUDE_PASTE_REDIRECT_URI });
-  return { url, attempt: { verifier, state, createdAt: now } };
+  const attempt: ClaudeSignInAttempt = { verifier, state, createdAt: now, ...(options.keepUntilCancelled ? { keepUntilCancelled: true } : {}) };
+  return { url: await claudeSignInUrl(attempt), attempt };
+}
+
+/**
+ * The authorization URL for an attempt already in flight. "Open Claude again" should reopen this
+ * rather than begin a new attempt: a code the user already copied belongs to this attempt only.
+ */
+export async function claudeSignInUrl(attempt: ClaudeSignInAttempt): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(attempt.verifier));
+  return claudeAuthorizeUrl({ challenge: toBase64url(new Uint8Array(digest)), state: attempt.state, redirectUri: CLAUDE_PASTE_REDIRECT_URI });
+}
+
+const ATTEMPT_PREFIX = 'claude-sign-in-attempt:';
+
+/** One opaque string so a host can keep the attempt across a reload (session storage, Keychain). */
+export function encodeClaudeSignInAttempt(attempt: ClaudeSignInAttempt): string {
+  return `${ATTEMPT_PREFIX}${textToBase64url(JSON.stringify(attempt))}`;
+}
+
+/** Undefined for anything but a well-formed encoded attempt. */
+export function decodeClaudeSignInAttempt(value: string | undefined | null): ClaudeSignInAttempt | undefined {
+  if (!value || !value.startsWith(ATTEMPT_PREFIX) || value.length > 4096) return undefined;
+  try {
+    const payload: unknown = JSON.parse(base64urlToText(value.slice(ATTEMPT_PREFIX.length)));
+    if (!isRecord(payload)) return undefined;
+    const { verifier, state, createdAt, keepUntilCancelled } = payload;
+    const pkceText = (text: unknown) => typeof text === 'string' && /^[A-Za-z0-9_-]{43,128}$/.test(text);
+    if (!pkceText(verifier) || !pkceText(state)) return undefined;
+    if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return undefined;
+    return { verifier: verifier as string, state: state as string, createdAt, ...(keepUntilCancelled === true ? { keepUntilCancelled: true } : {}) };
+  } catch { return undefined; }
 }
 
 /**
@@ -203,7 +243,7 @@ export async function completeClaudeSignIn(
   signal?: AbortSignal,
   now = Date.now(),
 ): Promise<string> {
-  if (now - attempt.createdAt > ATTEMPT_TTL_MS || now < attempt.createdAt) {
+  if (!attempt.keepUntilCancelled && (now - attempt.createdAt > ATTEMPT_TTL_MS || now < attempt.createdAt)) {
     throw new ClaudeAuthError(400, 'This sign-in expired. Start again.');
   }
   const code = parseClaudePastedCode(pasted, attempt.state);

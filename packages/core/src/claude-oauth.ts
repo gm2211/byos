@@ -42,10 +42,26 @@ export function claudeAuthorizeUrl(params: ClaudeAuthorizeParams): string {
   return url.href;
 }
 
-/** Accepts `CODE#STATE` (as the console page shows it) or a bare code. Undefined when unusable. */
+/**
+ * Accepts `CODE#STATE` (as the code page shows it), a bare code, or the whole callback URL
+ * (`...?code=CODE&state=STATE`). Line breaks picked up while copying are dropped. Undefined when
+ * unusable or when the state belongs to another attempt.
+ */
 export function parseClaudePastedCode(pasted: string, expectedState: string): string | undefined {
   if (typeof pasted !== 'string') return undefined;
-  const [code, state = expectedState] = pasted.trim().split('#');
+  const text = pasted.replace(/[\r\n]+/g, '').trim();
+  let code: string | undefined;
+  let state: string | undefined;
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      const url = new URL(text);
+      code = url.searchParams.get('code') ?? undefined;
+      state = url.searchParams.get('state') ?? (url.hash.length > 1 ? url.hash.slice(1) : undefined);
+    } catch { return undefined; }
+  } else {
+    [code, state] = text.split('#');
+  }
+  state ??= expectedState;
   if (!code || code.length > 4096 || /\s/.test(code) || state !== expectedState) return undefined;
   return code;
 }
