@@ -24,9 +24,13 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - Web search: pass `webSearch: true` in a `ChatRequest` to an adapter whose `webSearch` is true and
   the model may search with the provider's own built-in tool, billed to the user's key or plan:
   Claude (Anthropic's `web_search` server tool, `CLAUDE_WEB_SEARCH_TOOL`), ChatGPT (`web_search`
-  Responses tool), Grok (one non-streaming `/responses` call, `streamXaiWebSearch`) and OpenRouter
+  Responses tool), Grok (a streamed `/responses` call, `streamXaiWebSearch`) and OpenRouter
   (the `web` plugin). Each page the provider reports reading or citing arrives once as a
-  `{ type: 'source', source: { url, title } }` event. Groq and Hugging Face have no search tool,
+  `{ type: 'source', source: { url, title } }` event. Claude, ChatGPT and Grok also send
+  `{ type: 'search', query?, url? }` as each search step starts, so a page can show what is being
+  searched live. Grok's answer is still read from the whole response on `response.completed`; if
+  its stream drops (a phone switching apps), the stored response is read back with
+  `GET /v1/responses/{id}` for up to a minute. Groq and Hugging Face have no search tool,
   leave `webSearch` unset and ignore the flag. Covered by synthetic tests only: live searches on each
   provider are unverified, and Anthropic API organisations can switch the tool off in their console.
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place

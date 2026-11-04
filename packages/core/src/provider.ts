@@ -60,6 +60,12 @@ export type ChatEvent =
   | { type: 'text'; text: string }
   | { type: 'source'; source: WebSource }
   | { type: 'reasoning'; text: string }
+  /**
+   * The provider's built-in web search started a step: a query when the provider reports one,
+   * or a page it opened. Arrives while the search runs, before its sources, so a live view can
+   * show what is being searched. Adapters that cannot see search steps never send it.
+   */
+  | { type: 'search'; query?: string; url?: string }
   | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
   | { type: 'done' };
 

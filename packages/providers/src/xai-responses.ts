@@ -52,7 +52,7 @@
  *    max_output_tokens is documented there as including reasoning as well as output tokens, the same
  *    accounting chat/completions' max_completion_tokens has.
  *
- * NOT SENT: `stream`. See the streaming note on parseXaiResponsesPayload below.
+ * `stream: true` is sent by streamXaiWebSearch for progress only; see its note.
  *
  * RESPONSE SHAPE
  * --------------
@@ -76,6 +76,7 @@
  */
 import type { ChatEvent, ChatRequest } from '@byos/core';
 import { ProviderRequestError, redactProviderSecrets } from './chat.js';
+import { iterateSseEvents } from './sse.js';
 import type { CloudEndpoint } from './endpoints.js';
 
 /** A citation Grok reported for its answer, normalized to the `{title, url}` pair every source
@@ -210,16 +211,10 @@ export function xaiResponsesErrorText(payload: unknown): string | undefined {
 /**
  * Turns a parsed `/v1/responses` reply into text + citations.
  *
- * STREAMING: deliberately absent. The Responses API does support `stream: true`, and xAI's tools
- * documentation names one event type (`response.output_text.delta`) in an SDK example — but the SSE
- * frame shape behind that name (which field of the event carries the incremental text, how
- * annotations arrive mid-stream, how the run terminates) is not documented on xAI's site, and the
- * streaming pages that would carry it describe the chat/completions format instead. A guessed SSE
- * parser fails in the worst possible way here: it yields an empty answer on a 200 response, which
- * reads to a buyer as "Grok returned nothing" rather than as a bug. So every call this module makes
- * is non-streaming, and callers narrate the wait with a note instead of a live token feed. Sources
- * still reach the live feed — they are forwarded the moment the reply lands, before the answer is
- * parsed. If xAI ever documents the event shape, this is the one function that has to change.
+ * STREAMING: the final answer is always read from a whole response object with this function, even
+ * when the request streamed: streamXaiWebSearch reads the stream only for search progress and takes
+ * the answer from the object `response.completed` carries. xAI does not document its delta shapes,
+ * and a guessed delta parser could yield an empty answer on a 200, so none is relied on.
  */
 export function parseXaiResponsesPayload(payload: unknown): XaiResponsesResult {
   const errorMessage = xaiResponsesErrorText(payload);
@@ -267,35 +262,140 @@ export function parseXaiResponsesPayload(payload: unknown): XaiResponsesResult {
   return { text, sources, truncated, usage: usageFrom(root.usage), errorMessage };
 }
 
+/** One web search step from a `web_search_call` output item: the query, or the page it opened. */
+export function xaiSearchStep(item: unknown): { query?: string; url?: string } | undefined {
+  if (!item || typeof item !== 'object' || (item as { type?: unknown }).type !== 'web_search_call') return undefined;
+  const action = (item as { action?: unknown }).action;
+  const a = action && typeof action === 'object' ? action as { query?: unknown; url?: unknown } : {};
+  const query = typeof a.query === 'string' && a.query.trim() ? a.query.trim().slice(0, 400) : undefined;
+  const url = typeof a.url === 'string' && /^https?:\/\//i.test(a.url) ? a.url : undefined;
+  return { ...(query ? { query } : {}), ...(url ? { url } : {}) };
+}
+
+function* finalEvents(payload: unknown, endpoint: CloudEndpoint, seen: Set<string>): Generator<ChatEvent> {
+  const result = parseXaiResponsesPayload(payload);
+  if (result.errorMessage) throw new ProviderRequestError(redactProviderSecrets(result.errorMessage, [endpoint.apiKey]), 200);
+  for (const source of result.sources) if (!seen.has(source.url)) { seen.add(source.url); yield { type: 'source', source }; }
+  if (result.text) yield { type: 'text', text: result.text };
+  if (result.usage) yield { type: 'usage', inputTokens: result.usage.prompt_tokens, outputTokens: result.usage.completion_tokens };
+}
+
+const RECOVERY_POLLS = 20;
+const RECOVERY_INTERVAL_MS = 3000;
+const ID = /^[A-Za-z0-9_-]{1,200}$/;
+
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', stop); resolve(); }, ms);
+    const stop = () => { clearTimeout(timer); reject(signal?.reason); };
+    signal?.addEventListener('abort', stop, { once: true });
+  });
+}
+
 /**
- * `ChatRequest` with `webSearch` on Grok: one non-streaming `/responses` call with the `web_search`
- * tool (see `parseXaiResponsesPayload` for why it does not stream), surfaced as ChatEvents. Sources
- * are yielded before the answer text so a live view can show them first. System messages become
- * `instructions`; the conversation goes as role/content input items.
+ * Reads back a stored response after the stream broke (a phone that switched apps drops the
+ * connection). xAI stores responses by default and documents GET /v1/responses/{id}; whether a
+ * run keeps going after its stream drops is not documented, so this waits a bounded time and
+ * gives up with `undefined` rather than assuming it will finish.
+ */
+async function recoverStoredResponse(endpoint: CloudEndpoint, id: string, signal?: AbortSignal): Promise<unknown | undefined> {
+  for (let poll = 0; poll < RECOVERY_POLLS; poll++) {
+    signal?.throwIfAborted();
+    let payload: { status?: unknown } | undefined;
+    try {
+      const response = await fetch(`${xaiResponsesUrl(endpoint)}/${id}`, {
+        signal, redirect: 'error', headers: { Authorization: `Bearer ${endpoint.apiKey}`, ...endpoint.headers },
+      });
+      if (!response.ok) return undefined;
+      payload = await response.json();
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      return undefined;
+    }
+    const status = payload?.status;
+    if (status === 'completed' || status === 'incomplete') return payload;
+    if (status !== 'in_progress' && status !== 'queued') return undefined;
+    await pause(RECOVERY_INTERVAL_MS, signal);
+  }
+  return undefined;
+}
+
+/**
+ * `ChatRequest` with `webSearch` on Grok: a streamed `/responses` call with the `web_search` tool,
+ * surfaced as ChatEvents.
+ *
+ * The stream is read for progress only: each `web_search_call` item announced by
+ * `response.output_item.added`/`done` becomes a `search` event as it happens. The answer and its
+ * citations come from the full response object on `response.completed`, parsed with the same
+ * doc-verified reader as a non-streamed reply, so a stream whose delta shape differs from OpenAI's
+ * still ends with the same answer instead of an empty one. A reply sent as plain JSON (no stream)
+ * is read the old way. If the connection drops mid-run and the response id is known, the stored
+ * response is read back with GET /v1/responses/{id}.
  */
 export async function* streamXaiWebSearch(endpoint: CloudEndpoint, request: ChatRequest): AsyncGenerator<ChatEvent> {
   const response = await fetch(xaiResponsesUrl(endpoint), {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
-    headers: { Authorization: `Bearer ${endpoint.apiKey}`, 'Content-Type': 'application/json', ...endpoint.headers },
+    headers: { Authorization: `Bearer ${endpoint.apiKey}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', ...endpoint.headers },
     body: JSON.stringify({
       model: request.model,
       instructions: request.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n'),
       input: request.messages.filter(m => m.role !== 'system').map(({ role, content }) => ({ role, content })),
       tools: [{ type: 'web_search' }],
       include: ['no_inline_citations'],
+      stream: true,
     }),
   });
-  const payload = await response.json().catch(() => undefined);
-  if (!response.ok) {
-    const text = xaiResponsesErrorText(payload);
-    throw new ProviderRequestError(text ? redactProviderSecrets(text, [endpoint.apiKey]) : `The provider answered ${response.status}.`, response.status);
+  const seen = new Set<string>();
+  if (!response.ok || !response.body || !(response.headers.get('content-type') || '').includes('text/event-stream')) {
+    const payload = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      const text = xaiResponsesErrorText(payload);
+      throw new ProviderRequestError(text ? redactProviderSecrets(text, [endpoint.apiKey]) : `The provider answered ${response.status}.`, response.status);
+    }
+    yield* finalEvents(payload, endpoint, seen);
+    yield { type: 'done' };
+    return;
   }
-  const result = parseXaiResponsesPayload(payload);
-  if (result.errorMessage) throw new ProviderRequestError(redactProviderSecrets(result.errorMessage, [endpoint.apiKey]), 200);
-  for (const source of result.sources) yield { type: 'source', source };
-  if (result.text) yield { type: 'text', text: result.text };
-  if (result.usage) yield { type: 'usage', inputTokens: result.usage.prompt_tokens, outputTokens: result.usage.completion_tokens };
+  const reader = response.body.getReader();
+  const steps = new Map<string, string>();
+  let responseId: string | undefined;
+  let completed: unknown;
+  try {
+    for await (const event of iterateSseEvents(reader)) {
+      if (event.type !== 'data') continue;
+      let data: { type?: unknown; item?: unknown; response?: { id?: unknown }; error?: unknown };
+      try { data = JSON.parse(event.data); } catch { continue; }
+      if (!data || typeof data !== 'object') continue;
+      if (typeof data.response?.id === 'string' && ID.test(data.response.id)) responseId = data.response.id;
+      if (data.type === 'error' || data.type === 'response.failed') {
+        const text = xaiResponsesErrorText(data) ?? xaiResponsesErrorText(data.response);
+        throw new ProviderRequestError(text ? redactProviderSecrets(text, [endpoint.apiKey]) : 'Grok stopped with an error.', 200);
+      }
+      if (data.type === 'response.output_item.added' || data.type === 'response.output_item.done') {
+        const step = xaiSearchStep(data.item);
+        if (step) {
+          const id = typeof (data.item as { id?: unknown }).id === 'string' ? (data.item as { id: string }).id : `${steps.size}`;
+          const key = `${step.query ?? ''}\n${step.url ?? ''}`;
+          // One event per new step, and one more when a later event fills in its query or page.
+          const before = steps.get(id);
+          if (before === undefined || (key !== before && key !== '\n')) { steps.set(id, key); yield { type: 'search', ...step }; }
+        }
+      }
+      if (data.type === 'response.completed' || data.type === 'response.incomplete') { completed = data.response; break; }
+    }
+  } catch (error) {
+    if (request.signal?.aborted || error instanceof ProviderRequestError || !responseId) throw error;
+    completed = await recoverStoredResponse(endpoint, responseId, request.signal);
+    if (!completed) throw error;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A pending read releases it when settled. */ }
+  }
+  if (!completed && responseId) completed = await recoverStoredResponse(endpoint, responseId, request.signal);
+  if (!completed) throw new ProviderRequestError('Grok ended the search without an answer. Try again.', 200);
+  yield* finalEvents(completed, endpoint, seen);
   yield { type: 'done' };
 }
