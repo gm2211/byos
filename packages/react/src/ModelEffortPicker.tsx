@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { SearchableSelect } from './SearchableSelect.js';
+import { ByosIcon } from './icons.js';
 
 /**
  * The exact model and effort, both from the provider's own model list. `renderSelect` lets a site
@@ -66,18 +67,18 @@ export function ModelEffortPicker(props: ModelEffortPickerProps) {
   const stale = props.staleness === 'remembered' || props.staleness === 'fallback';
   return <div className={c.root ?? 'byos byos-model-effort'}>
     <div className={field}>
-      <span>{s.model} {props.modelNote && <small>{props.modelNote}</small>}</span>
+      <span className="byos-field-icon" aria-hidden="true"><ByosIcon name="chip" size={16}/></span><span>{s.model} {props.modelNote && <small>{props.modelNote}</small>}</span>
       {select({ ariaLabel: s.modelAriaLabel, value: props.model, options: props.models, onChange: props.onModelChange })}
     </div>
     {/* Effort is its own setting, always shown: a model without selectable levels still says so in
         the same place, rather than the field disappearing into a note under the model. */}
-    <div className={field}>
-      <span>{s.effort} {props.efforts.length > 0 && <small>{s.effortFrom(props.providerName)}</small>}</span>
+    <div className={field} title={props.efforts.length === 0 ? s.noEffort(props.providerName) : undefined}>
+      <span className="byos-field-icon" aria-hidden="true"><ByosIcon name="gauge" size={16}/></span><span>{s.effort} {props.efforts.length > 0 && <small>{s.effortFrom(props.providerName)}</small>}</span>
       {props.efforts.length > 0
         ? select({ ariaLabel: s.effortAriaLabel, value: props.effort, options: props.efforts, onChange: props.onEffortChange })
         : select({ ariaLabel: s.effortAriaLabel, value: '', options: [{ value: '', label: s.providerDefault }], onChange: () => undefined })}
       {props.efforts.length === 0 && <p className={note}>{s.noEffort(props.providerName)}</p>}
     </div>
-    {stale && <div className="byos-picker-stale"><p className={note}>{props.staleness === 'remembered' ? s.remembered(props.providerName) : s.fallback(props.providerName)}</p>{props.onRetry && <button type="button" className={c.retry ?? 'byos-secondary-button'} onClick={props.onRetry}>{s.retry}</button>}</div>}
+    {stale && <div className="byos-picker-stale"><p className={note}><span className="byos-field-icon" aria-hidden="true"><ByosIcon name="cloud" size={14}/></span>{props.staleness === 'remembered' ? s.remembered(props.providerName) : s.fallback(props.providerName)}</p>{props.onRetry && <button type="button" className={c.retry ?? 'byos-secondary-button'} title={s.retry} onClick={props.onRetry}><span className="byos-field-icon" aria-hidden="true"><ByosIcon name="refresh" size={15}/></span><span className="byos-retry-label">{s.retry}</span></button>}</div>}
   </div>;
 }

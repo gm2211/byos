@@ -34,25 +34,52 @@ test('AiAccountSettings puts Account first and opens it while signed out', () =>
     toolsSettings: createElement('p', null, 'Tool access'),
   };
   const signedOut = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, signedIn: false }));
-  assert.deepEqual([...signedOut.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Account', 'Model', 'Tools']);
-  assert.match(signedOut, /aria-selected="true"[^>]*>Account</);
+  assert.deepEqual([...signedOut.matchAll(/role="tab"[^>]*>(?:<svg.*?<\/svg><span>)?([^<]+)</g)].map(match => match[1]), ['Account', 'Model', 'Tools']);
+  assert.match(signedOut, /aria-selected="true"[^>]*>(?:<svg.*?<\/svg><span>)?Account</);
   assert.match(signedOut, /Account controls/);
   assert.doesNotMatch(signedOut, /Model controls/);
   const signedIn = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, signedIn: true }));
-  assert.deepEqual([...signedIn.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Model', 'Account', 'Tools']);
+  assert.deepEqual([...signedIn.matchAll(/role="tab"[^>]*>(?:<svg.*?<\/svg><span>)?([^<]+)</g)].map(match => match[1]), ['Model', 'Account', 'Tools']);
   assert.match(signedIn, /Model controls/);
 });
 
-test('AiAccountSettings keeps expired recovery in Account and gives Model a compact route to it', () => {
+test('AiAccountSettings shows a Reconnect banner that opens Account when no one-tap reconnect is bound', () => {
   const html = renderToStaticMarkup(createElement(AiAccountSettings, {
-    providerName: 'Acme AI', expired: true, onChangeProvider: () => undefined,
+    providerName: 'Acme AI', expired: true, signedIn: true, onChangeProvider: () => undefined,
     modelSettings: createElement('p', null, 'Model controls'),
     accountSettings: createElement('p', null, 'Account controls'),
-    recoveryAction: createElement('button', null, 'Reconnect'),
+    recoveryAction: createElement('button', null, 'Recover'),
   }));
-  assert.match(html, /Reconnect to use AI\./);
-  assert.match(html, />Account<\/button>/);
-  assert.doesNotMatch(html, />Reconnect<\/button>/);
+  assert.match(html, /role="status"[^>]*>.*Reconnect to use AI\./);
+  assert.match(html, /class="byos-account-settings-reconnect"[^>]*>.*?Reconnect<\/button>/);
+  assert.match(html, /Sign-in expired/);
+  assert.match(html, /byos-account-settings-dot-expired/);
+  assert.doesNotMatch(html, />Recover<\/button>/);
+});
+
+test('AiAccountSettings runs onReconnect from the banner and reports progress', () => {
+  let reconnects = 0;
+  const props = {
+    providerName: 'Acme AI', expired: true, onChangeProvider: () => undefined, onReconnect: () => { reconnects += 1; },
+    modelSettings: createElement('p', null, 'Model controls'),
+    accountSettings: createElement('p', null, 'Account controls'),
+  };
+  const idle = renderToStaticMarkup(createElement(AiAccountSettings, props));
+  assert.match(idle, /byos-account-settings-reconnect/);
+  const busy = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, reconnecting: true }));
+  assert.match(busy, /class="byos-account-settings-reconnect" disabled="" aria-busy="true"[^>]*>.*?Connecting…<\/button>/);
+  const healthy = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, expired: false, signedIn: true }));
+  assert.doesNotMatch(healthy, /byos-account-settings-reconnect/);
+  assert.match(healthy, /Connected/);
+  assert.equal(reconnects, 0);
+});
+
+test('AiAccountSettings labels the icon-only Change AI service button', () => {
+  const html = renderToStaticMarkup(createElement(AiAccountSettings, {
+    providerName: 'Acme AI', onChangeProvider: () => undefined, modelSettings: 'm', accountSettings: 'a',
+  }));
+  assert.match(html, /<button type="button" class="byos-account-settings-change" aria-label="Change AI service" title="Change AI service">/);
+  assert.match(html, /byos-account-settings-avatar" aria-hidden="true">A</);
 });
 
 test('AiProviderPicker labels provider choices and marks the selected option', () => {
@@ -346,8 +373,8 @@ test('AiConnectPanel shows the heading and a provider picker until a service is 
 
 test('AiConnectPanel opens Account first while signed out and renders only declared, controlled methods in provider order', () => {
   const html = connectPanel({ selectedId: 'acme', preferences: createElement('p', null, 'Prefs') });
-  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]).slice(0, 3), ['Account', 'Model', 'Preferences']);
-  assert.match(html, /aria-selected="true"[^>]*>Account</);
+  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>(?:<svg.*?<\/svg><span>)?([^<]+)</g)].map(match => match[1]).slice(0, 3), ['Account', 'Model', 'Preferences']);
+  assert.match(html, /aria-selected="true"[^>]*>(?:<svg.*?<\/svg><span>)?Account</);
   assert.ok(html.indexOf("byos-signin") < html.indexOf("byos-connect-key"));
   assert.match(html, /byos-connect-or/);
   assert.match(html, /<input[^>]*type="password"/);
@@ -371,8 +398,8 @@ test('AiConnectPanel never renders a declared method that has no controller', ()
 test('AiConnectPanel signed in opens Model and offers the remember switch and sign out in Account', () => {
   const services = [connectService({ signedIn: true, remember: { checked: true, onChange: connectNoop }, onSignOut: connectNoop })];
   const html = connectPanel({ selectedId: 'acme', services });
-  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Model', 'Account']);
-  assert.match(html, /aria-selected="true"[^>]*>Model</);
+  assert.deepEqual([...html.matchAll(/role="tab"[^>]*>(?:<svg.*?<\/svg><span>)?([^<]+)</g)].map(match => match[1]), ['Model', 'Account']);
+  assert.match(html, /aria-selected="true"[^>]*>(?:<svg.*?<\/svg><span>)?Model</);
   assert.match(html, /Connected to Acme AI/);
   assert.match(html, /role="switch" aria-checked="true"/);
   assert.match(html, /Stay signed in on this device/);
@@ -453,4 +480,11 @@ test('AiConnectPanel renders PasteCodeSignIn only for a paste-code pkce method w
   // A plain pkce controller does not stand in for a paste-code method.
   const plainPkce = connectPanel({ selectedId: 'claude', services: [claudeLike({ apiKey: undefined, pkce: { onStart: connectNoop } })] });
   assert.doesNotMatch(plainPkce, /Sign in with Claude<\/button>/);
+});
+
+test('AiConnectPanel binds the expired banner to redirect sign-in by default', () => {
+  const services = [connectService({ signedIn: true, expired: true, pkce: { onStart: connectNoop, busy: true } })];
+  const html = connectPanel({ selectedId: 'acme', services });
+  assert.match(html, /class="byos-account-settings-reconnect" disabled="" aria-busy="true"/);
+  assert.match(html, /Connecting…<\/button>/);
 });

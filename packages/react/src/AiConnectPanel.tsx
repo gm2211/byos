@@ -53,6 +53,14 @@ export type AiConnectService = {
   pasteToken?: AiConnectKeyForm;
   remember?: { checked: boolean; onChange: (checked: boolean) => void; error?: string };
   onSignOut?: () => void;
+  /**
+   * One-tap reconnect from the expired banner. Defaults to `pkce.onStart` when the provider declares
+   * a redirect PKCE method; otherwise the banner opens Account, where every sign-in method is listed.
+   */
+  onReconnect?: () => void;
+  reconnecting?: boolean;
+  /** Provider mark for the header avatar; defaults to the display name's first letter. */
+  icon?: ReactNode;
   modelSettings: ReactNode;
 };
 
@@ -68,6 +76,10 @@ export type AiConnectPanelStrings = {
   preferencesTab: string;
   expiredModelNote: string;
   expiredStatus: string;
+  connectedStatus: string;
+  signedOutStatus: string;
+  reconnect: string;
+  /** @deprecated The expired banner now says `reconnect`. */
   openAccountTab: string;
   or: string;
   signInWith: (name: string) => string;
@@ -94,6 +106,9 @@ export const defaultAiConnectPanelStrings: AiConnectPanelStrings = {
   preferencesTab: 'Preferences',
   expiredModelNote: 'Reconnect to use AI.',
   expiredStatus: 'Sign-in expired',
+  connectedStatus: 'Connected',
+  signedOutStatus: 'Not connected',
+  reconnect: 'Reconnect',
   openAccountTab: 'Account',
   or: 'or',
   signInWith: name => `Sign in with ${name}`,
@@ -222,6 +237,10 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
     </section>;
   }
 
+  const redirectPkce = service.provider.signIn.some(method => method.kind === 'pkce' && method.completion !== 'paste-code');
+  const onReconnect = service.onReconnect ?? (redirectPkce ? service.pkce?.onStart : undefined);
+  const reconnecting = service.onReconnect ? service.reconnecting : redirectPkce ? service.pkce?.busy : undefined;
+
   return <div className={className}>
     <AiAccountSettings
       key={service.provider.id}
@@ -235,6 +254,9 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
       accountSettings={<AccountTab service={service} strings={strings}/>}
       toolsSettings={props.preferences}
       recoveryAction={props.recoveryAction}
+      onReconnect={onReconnect}
+      reconnecting={reconnecting}
+      providerIcon={service.icon}
       strings={{
         heading: strings.settingsHeading,
         changeProvider: strings.changeProvider,
@@ -243,6 +265,10 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
         toolsTab: strings.preferencesTab,
         expiredModelNote: strings.expiredModelNote,
         expiredStatus: strings.expiredStatus,
+        connectedStatus: strings.connectedStatus,
+        signedOutStatus: strings.signedOutStatus,
+        reconnect: strings.reconnect,
+        reconnecting: strings.connecting,
         openAccountTab: strings.openAccountTab,
       }}
     />

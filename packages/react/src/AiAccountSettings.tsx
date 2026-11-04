@@ -1,4 +1,5 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ByosIcon, type ByosIconName } from './icons.js';
 
 export type AiAccountSettingsTab = 'model' | 'account' | 'tools';
 
@@ -10,6 +11,11 @@ export type AiAccountSettingsStrings = {
   toolsTab: string;
   expiredModelNote: string;
   expiredStatus: string;
+  connectedStatus: string;
+  signedOutStatus: string;
+  reconnect: string;
+  reconnecting: string;
+  /** @deprecated The expired banner now always says `reconnect`; kept so existing string overrides still type-check. */
   openAccountTab: string;
 };
 
@@ -21,8 +27,14 @@ export const defaultAiAccountSettingsStrings: AiAccountSettingsStrings = {
   toolsTab: 'Tools',
   expiredModelNote: 'Reconnect to use AI.',
   expiredStatus: 'Sign-in expired',
+  connectedStatus: 'Connected',
+  signedOutStatus: 'Not connected',
+  reconnect: 'Reconnect',
+  reconnecting: 'Connecting…',
   openAccountTab: 'Account',
 };
+
+const TAB_ICONS: Record<AiAccountSettingsTab, ByosIconName> = { model: 'sliders', account: 'key', tools: 'tool' };
 
 export type AiAccountSettingsProps = {
   providerName: string;
@@ -35,6 +47,15 @@ export type AiAccountSettingsProps = {
   accountSettings: ReactNode;
   toolsSettings?: ReactNode;
   recoveryAction?: ReactNode;
+  /**
+   * One-tap reconnect for an expired sign-in, run from the banner above the tabs. Without it the
+   * banner's Reconnect button opens Account, where `recoveryAction` and the sign-in methods live.
+   */
+  onReconnect?: () => void;
+  /** Disables the banner's Reconnect button and shows `strings.reconnecting` while a reconnect runs. */
+  reconnecting?: boolean;
+  /** Provider mark in the header avatar. Defaults to the provider name's first letter. */
+  providerIcon?: ReactNode;
   strings?: Partial<AiAccountSettingsStrings>;
   className?: string;
   /** Preserve host-owned sign-in/download state while inactive panes stay hidden. */
@@ -57,6 +78,10 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
   ];
   const active = tabs.find(tab => tab.id === activeTab) ?? tabs[0];
   const activeTabId = `${generatedId}-${active.id}-tab`;
+  const state = props.expired ? 'expired' : props.signedIn === false ? 'signed-out' : props.signedIn === true ? 'connected' : undefined;
+  const statusText = state === 'expired' ? strings.expiredStatus : state === 'signed-out' ? strings.signedOutStatus : strings.connectedStatus;
+  // With a one-tap reconnect the banner stays on every tab; otherwise it routes to Account, so it hides there.
+  const showBanner = props.expired === true && (props.onReconnect != null || active.id !== 'account');
   const panelId = props.keepPanelsMounted ? `${generatedId}-${active.id}-panel` : `${generatedId}-panel`;
 
   function selectTab(id: AiAccountSettingsTab, focus = false) {
@@ -81,31 +106,36 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
     <header className="byos-account-settings-header">
       <h2 id={headingId} tabIndex={-1}>{strings.heading}</h2>
       <div className="byos-account-settings-provider">
-        <strong>{props.providerName}</strong>
-        {props.expired && <span className="byos-account-settings-status">{strings.expiredStatus}</span>}
-        <button type="button" className="byos-account-settings-change" onClick={props.onChangeProvider}>{strings.changeProvider}</button>
+        <span className="byos-account-settings-avatar" aria-hidden="true">
+          {props.providerIcon ?? props.providerName.trim().charAt(0).toUpperCase()}
+          {state && <span className={`byos-account-settings-dot byos-account-settings-dot-${state}`}/>}
+        </span>
+        <span className="byos-account-settings-identity">
+          <strong>{props.providerName}</strong>
+          {state && <span className={`byos-account-settings-status byos-account-settings-status-${state}`}>{statusText}</span>}
+        </span>
+        <button type="button" className="byos-account-settings-change" aria-label={strings.changeProvider} title={strings.changeProvider} onClick={props.onChangeProvider}><ByosIcon name="swap" size={18}/></button>
       </div>
     </header>
+    {showBanner && <div className="byos-account-settings-expired" role="status">
+      <ByosIcon name="alert" size={16}/>
+      <span>{strings.expiredModelNote}</span>
+      <button type="button" className="byos-account-settings-reconnect" disabled={props.reconnecting} aria-busy={props.reconnecting || undefined} onClick={() => props.onReconnect ? props.onReconnect() : selectTab('account', true)}>
+        <ByosIcon name={props.reconnecting ? 'refresh' : 'plug'} size={15}/>{props.reconnecting ? strings.reconnecting : strings.reconnect}
+      </button>
+    </div>}
     <div className={`byos-account-settings-tabs byos-account-settings-tabs-${tabs.length}`} role="tablist" aria-label={strings.heading} onKeyDown={onTabKeyDown}>
       {tabs.map(tab => {
         const tabId = `${generatedId}-${tab.id}-tab`;
-        return <button key={tab.id} id={tabId} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={props.keepPanelsMounted ? `${generatedId}-${tab.id}-panel` : panelId} tabIndex={activeTab === tab.id ? 0 : -1} className="byos-account-settings-tab" onClick={() => selectTab(tab.id)}>{tab.label}</button>;
+        return <button key={tab.id} id={tabId} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={props.keepPanelsMounted ? `${generatedId}-${tab.id}-panel` : panelId} tabIndex={activeTab === tab.id ? 0 : -1} className="byos-account-settings-tab" onClick={() => selectTab(tab.id)}><ByosIcon name={TAB_ICONS[tab.id]} size={15}/><span>{tab.label}</span></button>;
       })}
     </div>
     {props.keepPanelsMounted ? tabs.map(tab => (
       <div key={tab.id} id={`${generatedId}-${tab.id}-panel`} className="byos-account-settings-panel" role="tabpanel" aria-labelledby={`${generatedId}-${tab.id}-tab`} hidden={active.id !== tab.id}>
-        {props.expired && tab.id === 'model' && <p className="byos-account-settings-expired" role="status">
-          <span>{strings.expiredModelNote}</span>
-          <button type="button" onClick={() => selectTab('account', true)}>{strings.openAccountTab}</button>
-        </p>}
         {tab.content}
       </div>
     )) : (
     <div id={panelId} className="byos-account-settings-panel" role="tabpanel" aria-labelledby={activeTabId}>
-      {props.expired && activeTab === 'model' && <p className="byos-account-settings-expired" role="status">
-        <span>{strings.expiredModelNote}</span>
-        <button type="button" onClick={() => selectTab('account', true)}>{strings.openAccountTab}</button>
-      </p>}
       {active.content}
     </div>
     )}
