@@ -104,8 +104,13 @@ action. Model is the initial tab. Set `signedIn={false}` when no account or API 
 Account then moves first and opens by default, and Model returns to first place once `signedIn`
 is true (the active tab follows that default until the user picks one). Account and Tools appear only when their content is supplied;
 ArrowLeft/ArrowRight, Home, and End move between tabs. Only the active tab panel is mounted.
-When `expired` is true, Model shows a short link to Account and `recoveryAction` appears inside
-Account. Provider changes, account controls, and tool actions remain application callbacks/content.
+The header shows the provider as an avatar (first letter, or `providerIcon`) with a status dot and
+a short status (Connected, Sign-in expired, or Not connected, from `signedIn` and `expired`).
+**Change AI service** is an icon button with that accessible name, and the tabs carry icons.
+When `expired` is true, an amber banner above the tabs offers **Reconnect**: pass `onReconnect`
+(and `reconnecting` while it runs) for a one-tap reconnect, otherwise the button opens Account,
+where `recoveryAction` appears. Inside the panel, `ModelEffortPicker` renders as icon rows with an
+icon-only retry for a stale model list. Provider changes, account controls, and tool actions remain application callbacks/content.
 `AiProviderPicker` renders a short list of provider actions with optional badges and selected state;
 `onSelect` reports an id and never starts authentication.
 
@@ -118,6 +123,7 @@ Account. Provider changes, account controls, and tool actions remain application
   modelSettings={<ModelEffortPicker {...pickerProps} />}
   accountSettings={<AccountControls />}
   toolsSettings={<ToolControls />}
+  onReconnect={reconnect}
   recoveryAction={<button onClick={reconnect}>Reconnect</button>}
 />
 
@@ -161,7 +167,9 @@ picker, method screens, and code screens around the lower-level pieces.
   service was already selected a **Back to <name>** button returns to it. Picking calls `onSelect(id)`.
 - **Service view**: `AiAccountSettings` with `keepPanelsMounted`, `signedIn` from the service, `expired`,
   the third tab labeled **Preferences** (your `preferences` node; omitted means no tab) and
-  `recoveryAction`. Signed out opens on Account; signed in opens on Model.
+  `recoveryAction`. Signed out opens on Account; signed in opens on Model. The expired banner's
+  **Reconnect** runs the service's `onReconnect`, or `pkce.onStart` when the provider declares a
+  redirect PKCE method; otherwise it opens Account. A service's optional `icon` fills the avatar.
 - **Account, signed out**: the service's optional `notice`, then each method in `provider.signIn`, in
   that order, separated by an "or" divider. Methods come only from `provider.signIn`; a declared kind with
   no controller on the service is not rendered. `device-code` renders a compact `DeviceCodeSignIn`
