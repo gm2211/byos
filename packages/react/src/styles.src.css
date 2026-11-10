@@ -6,7 +6,9 @@
  *   --byos-success, --byos-warning, --byos-warning-soft, --byos-danger, --byos-secondary-fill,
  *   --byos-secondary-border, --byos-secondary-hover, --byos-surface-overlay, --byos-surface-backdrop, --byos-radius,
  *   --byos-pill-fill, --byos-pill-border, --byos-pill-text,
- *   --byos-radius-lg, --byos-shadow
+ *   --byos-radius-lg, --byos-shadow,
+ *   --byos-primary, --byos-primary-strong, --byos-on-primary (the one primary button colour; default the accent),
+ *   --byos-connect-panel-min-height (steady Connect AI dialog height)
  * Every value below falls back to a neutral default, so an unthemed site still looks finished.
  */
 .byos-signin { display: grid; gap: 20px; padding: 4px 0; color: $text; font: 400 14px/1.5 $font; }
@@ -24,8 +26,8 @@
 .byos-signin .byos-signin-copy:hover { color: $accent; background: $surface-raised; }
 .byos-signin .byos-signin-code-label { color: $faint; font: 500 11px/1.5 $font-mono; letter-spacing: .1em; }
 .byos-signin .byos-signin-code-value { display: block; min-width: 0; max-width: 100%; color: $text; font: 500 clamp(22px, 5vw, 30px)/1.3 $font-mono; letter-spacing: .08em; overflow-wrap: anywhere; text-align: center; user-select: all; background: none; padding: 0; }
-.byos-signin .byos-signin-primary { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $accent; border-radius: $radius; background: $accent; color: $on-accent; font: 600 14px/1.5 $font; text-align: center; text-decoration: none; cursor: pointer; transition: background 150ms ease; }
-.byos-signin .byos-signin-primary:not(:disabled):hover { background: $accent-strong; border-color: $accent-strong; }
+.byos-signin .byos-signin-primary { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $primary; border-radius: $radius; background: $primary; color: $on-primary; font: 600 14px/1.5 $font; text-align: center; text-decoration: none; cursor: pointer; transition: background 150ms ease; }
+.byos-signin .byos-signin-primary:not(:disabled):hover { background: $primary-strong; border-color: $primary-strong; }
 .byos-signin .byos-signin-primary:disabled { border-color: $line; background: $surface-raised; color: $faint; cursor: not-allowed; }
 .byos-signin-progress { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; }
 .byos-signin-progress p, .byos-signin-connected p { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -261,8 +263,8 @@
 .byos-connect-input[aria-invalid="true"] { border-color: $danger; }
 .byos-connect-setup { display: grid; gap: 2px; margin: 0; padding-left: 20px; color: $muted; font-size: 12px; line-height: 1.5; }
 .byos-connect-setup a { display: inline-block; min-height: 24px; color: $accent; overflow-wrap: anywhere; }
-.byos-connect-primary { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $accent; border-radius: $radius; background: $accent; color: $on-accent; font: 600 14px/1.4 $font; text-align: center; cursor: pointer; transition: background 150ms ease; }
-.byos-connect-primary:not(:disabled):hover { background: $accent-strong; border-color: $accent-strong; }
+.byos-connect-primary { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $primary; border-radius: $radius; background: $primary; color: $on-primary; font: 600 14px/1.4 $font; text-align: center; cursor: pointer; transition: background 150ms ease; }
+.byos-connect-primary:not(:disabled):hover { background: $primary-strong; border-color: $primary-strong; }
 .byos-connect-primary:disabled { border-color: $line; background: $surface-raised; color: $faint; cursor: not-allowed; }
 .byos-connect-secondary { justify-self: start; min-height: 44px; padding: 0 14px; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; color: $text; font: 600 13px/1.3 $font; cursor: pointer; }
 .byos-connect-secondary:hover { background: $secondary-hover; }
@@ -277,3 +279,10 @@
 .byos-connect-switch-on .byos-connect-switch-thumb { transform: translateX(16px); }
 .byos-connect :is(button, a, input, summary):focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
 .byos-connect .byos-signin { padding: 0; }
+
+/* Connect dialog: one primary button colour (--byos-primary, default the accent) and a steady height so tabs never move. */
+.byos-connect .byos-account-settings-panel { min-height: $connect-panel-min-height; }
+.byos-connect-remember-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; cursor: pointer; }
+.byos-connect-remember-check input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: $accent; }
+.byos-connect-model-empty { margin: 0; padding: 12px; border: 1px dashed $line-strong; border-radius: $radius; color: $muted; font-size: 13px; line-height: 1.45; }
+.byos-signin-inline-privacy { border-top: 1px solid $line; }

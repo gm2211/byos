@@ -58,7 +58,7 @@ On mobile, `AiPill` portals its sheet to `document.body`; set tokens there or pa
 `portalContainer` pointing to a themed overlay root outside clipped containers.
 Unspecified variables use the neutral defaults. The full token list is font, font-mono, text, muted,
 faint, surface, surface-soft, surface-raised, surface-input, surface-overlay, surface-backdrop,
-line, line-strong, accent, accent-strong, on-accent, success, warning, warning-soft, danger,
+line, line-strong, accent, accent-strong, on-accent, primary, primary-strong, on-primary (the one primary button colour in the connect dialog; default the accent), connect-panel-min-height, success, warning, warning-soft, danger,
 secondary-fill, secondary-border, secondary-hover, pill-fill, pill-border, pill-text, radius,
 radius-lg, and shadow
 (each uses the `--byos-` prefix).
@@ -67,7 +67,7 @@ Use `className` on `DeviceCodeSignIn` and `AiPill`; `ModelEffortPicker` also sup
 `field`, `note`, and `retry` class names. `AiPill` supports button, prefix, label, popover, and
 backdrop class names. These can scope app-specific CSS while preserving the package defaults.
 
-`DeviceCodeSignIn`, `ModelEffortPicker`, `AiQuickSettingsPanel`, `AiAccountSettings`, and `AiProviderPicker` localize UI copy through their `strings` props. `DeviceCodeSignIn` accepts an optional `headingId` for dialog focus management and `compact` for a tabbed presentation. In compact mode, Remember and full privacy details appear on Privacy; code, approval, progress, and cancel stay on Sign in; Help carries sign-in guidance. The short disclosure appears before initial sign-in and is omitted while waiting. ArrowLeft/ArrowRight, Home, and End move between tabs. The default presentation remains unchanged.
+`DeviceCodeSignIn`, `ModelEffortPicker`, `AiQuickSettingsPanel`, `AiAccountSettings`, and `AiProviderPicker` localize UI copy through their `strings` props. `DeviceCodeSignIn` accepts an optional `headingId` for dialog focus management and `compact` for a tabbed presentation. In compact mode, Remember and full privacy details appear on Privacy; code, approval, progress, and cancel stay on Sign in; Help carries sign-in guidance. The short disclosure appears before initial sign-in and is omitted while waiting. ArrowLeft/ArrowRight, Home, and End move between tabs. `inlinePrivacy` (set by `AiConnectPanel`) drops the tabs: title, the sign-in button, the one-line disclosure, the Remember checkbox, then full privacy details behind a toggle, so Connect is never hidden. The default presentation remains unchanged.
 `AiPill` uses the explicit label props listed below. For example:
 
 ```tsx
@@ -176,6 +176,10 @@ picker, method screens, and code screens around the lower-level pieces.
   (`deviceCode`), `pkce` a primary button with caption, busy state and error (`pkce`), and `api-key` /
   `paste-token` a labelled password field with the method's `hint`, the `api-key` `setup` steps as ordered
   external links, a Connect button (disabled when empty or busy), an error, and a caption. Enter submits.
+  Every provider uses the same order (what it is, sign in, privacy sentence, remember checkbox) and the
+  same `--byos-primary` button, with no per-provider brand colour. Tabs share a fixed minimum height
+  (`--byos-connect-panel-min-height`). The Model tab says "Connect to choose a model." until connected
+  (`strings.modelSignedOut`).
 - **Account, signed in**: "Connected to <name>", the **Stay signed in on this device** switch (when
   `remember` is given) and **Sign out of <name>** (when `onSignOut` is given).
 

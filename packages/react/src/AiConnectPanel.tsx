@@ -91,6 +91,8 @@ export type AiConnectPanelStrings = {
   connectedTo: (name: string) => string;
   rememberLabel: string;
   rememberNote: string;
+  /** Model tab before an account is connected. */
+  modelSignedOut: string;
   signOut: (name: string) => string;
 };
 
@@ -121,6 +123,7 @@ export const defaultAiConnectPanelStrings: AiConnectPanelStrings = {
   rememberLabel: 'Stay signed in on this device',
   rememberNote: 'Off: sign in again when this tab closes. On: your token is saved in this browser, where scripts on this page can read it.',
   signOut: name => `Sign out of ${name}`,
+  modelSignedOut: 'Connect to choose a model.',
 };
 
 export type AiConnectPanelProps = {
@@ -184,7 +187,7 @@ function AccountTab({ service, strings }: { service: AiConnectService; strings: 
     let node: ReactNode = null;
     if (method.kind === 'device-code' && service.deviceCode) {
       node = <div className="byos-connect-method">
-        <DeviceCodeSignIn showProviderIdentity={false} helpMode="contextual" {...service.deviceCode} providerName={name} connected={false} onDisconnect={noop} compact/>
+        <DeviceCodeSignIn showProviderIdentity={false} helpMode="contextual" inlinePrivacy {...service.deviceCode} strings={{ remember: strings.rememberLabel, ...service.deviceCode.strings }} providerName={name} connected={false} onDisconnect={noop} compact/>
       </div>;
     } else if (method.kind === 'pkce' && method.completion === 'paste-code' && service.pasteCode) {
       node = <div className="byos-connect-method">
@@ -206,9 +209,16 @@ function AccountTab({ service, strings }: { service: AiConnectService; strings: 
     if (sections.length > 0) sections.push(<p key={`or-${key}`} className="byos-connect-or" aria-hidden="true"><span>{strings.or}</span></p>);
     sections.push(<div key={key} className="byos-connect-section">{node}</div>);
   });
+  // Device-code sign-in renders its own remember option; every other method gets it here, below Connect.
+  const hasDeviceCode = service.provider.signIn.some(method => method.kind === 'device-code') && service.deviceCode != null;
+  const remember = service.remember;
   return <div className="byos-connect-account">
     {service.notice != null && <div className="byos-connect-notice">{service.notice}</div>}
     {sections}
+    {remember && !hasDeviceCode && sections.length > 0 && <div className="byos-connect-section">
+      <label className="byos-connect-remember-check"><input type="checkbox" checked={remember.checked} onChange={event => remember.onChange(event.target.checked)}/><span>{strings.rememberLabel}</span></label>
+      {remember.error && <p className="byos-connect-error" role="alert">{remember.error}</p>}
+    </div>}
   </div>;
 }
 
@@ -250,7 +260,7 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
       signedIn={service.signedIn}
       keepPanelsMounted
       onChangeProvider={() => setChanging(true)}
-      modelSettings={service.modelSettings}
+      modelSettings={service.signedIn || service.expired ? service.modelSettings : <p className="byos-connect-model-empty">{strings.modelSignedOut}</p>}
       accountSettings={<AccountTab service={service} strings={strings}/>}
       toolsSettings={props.preferences}
       recoveryAction={props.recoveryAction}
