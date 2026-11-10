@@ -383,8 +383,32 @@ test('AiConnectPanel opens Account first while signed out and renders only decla
   assert.match(html, /<a href="https:\/\/example\.com\/keys" target="_blank" rel="noopener noreferrer">Open the console<\/a>/);
   assert.match(html, /<button type="submit"[^>]*disabled=""[^>]*>Connect<\/button>/);
   assert.match(html, /Your key stays in this browser\./);
-  // keepPanelsMounted: the Model pane is present but hidden.
-  assert.match(html, /hidden=""[^>]*>[^]*Model controls/);
+  // keepPanelsMounted: the Model pane is present but hidden, and offers no model list before connecting.
+  assert.match(html, /hidden=""[^>]*>[^]*Connect to choose a model\./);
+  assert.doesNotMatch(html, /Model controls/);
+});
+
+test('AiConnectPanel signed out shows one flat sign-in view: action, privacy sentence, remember, details', () => {
+  const html = connectPanel({ selectedId: 'acme', services: [connectService({
+    deviceCode: { status: 'idle', device: null, onStart: connectNoop, onCancel: connectNoop, signInBrand: 'chatgpt', disclosure: 'xAI handles sign-in.', privacyDetails: createElement('p', null, 'Long privacy'), remember: { checked: false, onChange: connectNoop } },
+    remember: { checked: false, onChange: connectNoop },
+  })] });
+  // No nested Sign in / Privacy tabs, and no per-provider brand colour.
+  assert.doesNotMatch(html, /byos-signin-compact-tabs|byos-chatgpt-identity/);
+  const button = html.indexOf('byos-signin-primary');
+  const sentence = html.indexOf('xAI handles sign-in.');
+  const remember = html.indexOf('Stay signed in on this device');
+  const details = html.indexOf('byos-signin-inline-privacy');
+  assert.ok(button > 0 && button < sentence && sentence < remember && remember < details);
+  assert.equal(html.match(/type="checkbox"/g)?.length, 1);
+});
+
+test('AiConnectPanel offers the remember checkbox below Connect for key and redirect methods', () => {
+  const remember = { checked: false, onChange: connectNoop };
+  const key = connectPanel({ selectedId: 'acme', services: [connectService({ deviceCode: undefined, remember })] });
+  assert.ok(key.indexOf('byos-connect-primary') < key.indexOf('byos-connect-remember-check'));
+  const pkce = connectPanel({ selectedId: 'acme', services: [connectService({ deviceCode: undefined, apiKey: undefined, pkce: { onStart: connectNoop, caption: 'Goes to Acme.' }, remember })] });
+  assert.ok(pkce.indexOf('Goes to Acme.') < pkce.indexOf('byos-connect-remember-check'));
 });
 
 test('AiConnectPanel never renders a declared method that has no controller', () => {

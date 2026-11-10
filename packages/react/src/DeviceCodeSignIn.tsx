@@ -138,6 +138,12 @@ export type DeviceCodeSignInProps = {
   signInBrand?: 'chatgpt';
   /** Compact connected-dialog layout with separate Sign in, Privacy, and Help tabs. */
   compact?: boolean;
+  /**
+   * Compact only: one flat Sign in view with no Privacy/Help tabs. Order is title, sign-in action,
+   * one privacy sentence (`disclosure`), the remember option, then `privacyDetails` behind a toggle,
+   * so the primary action is never hidden. Uses the shared primary button (no per-provider brand colour).
+   */
+  inlinePrivacy?: boolean;
   /** Whether to show the provider and plan eyebrow. Defaults to true. */
   showProviderIdentity?: boolean;
   /** Keep Help as a tab (default), or show it inside Sign in only while a code is pending or sign-in has failed. */
@@ -197,11 +203,12 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
 }
 
 function DeviceCodeStartButton({ props, label, available }: { props: DeviceCodeSignInProps; label: string; available: boolean }) {
-  const brandClass = props.signInBrand === 'chatgpt' ? ' byos-chatgpt-identity-button byos-chatgpt-identity-black' : '';
+  const flat = props.compact && props.inlinePrivacy;
+  const brandClass = props.signInBrand === 'chatgpt' && !flat ? ' byos-chatgpt-identity-button byos-chatgpt-identity-black' : '';
   return <button className={`byos-signin-primary${brandClass}`} type="button" disabled={!available} onClick={props.onStart}>
-    {props.signInBrand === 'chatgpt' && <ChatGPTMark variant="black"/>}
+    {props.signInBrand === 'chatgpt' && !flat && <ChatGPTMark variant="black"/>}
     <span>{label}</span>
-    {available && props.signInBrand !== 'chatgpt' && <ByosIcon name="external"/>}
+    {available && !flat && props.signInBrand !== 'chatgpt' && <ByosIcon name="external"/>}
   </button>;
 }
 
@@ -244,6 +251,8 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
   const panelId = `${id}-panel`;
   const activeTabId = `${id}-${selectedTab}-tab`;
   const showInitialDisclosure = !props.connected && !pending && props.status !== 'error';
+  const inline = props.inlinePrivacy === true;
+  const disclosureNode = props.disclosure ? <p className="byos-signin-disclosure">{props.disclosure}</p> : null;
 
   return <div className={`byos byos-signin byos-signin-compact${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading byos-signin-compact-heading">
@@ -251,13 +260,13 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
       <h3 id={props.headingId} tabIndex={props.headingId ? -1 : undefined}>{title}</h3>
       {(!pending || exchanging) && <p>{body}</p>}
     </header>
-    <div className={`byos-signin-compact-tabs${contextualHelpAvailable ? ' byos-signin-compact-tabs-two' : ''}`} role="tablist" aria-label={strings.privacySummary} onKeyDown={onTabKeyDown}>
+    {!inline && <div className={`byos-signin-compact-tabs${contextualHelpAvailable ? ' byos-signin-compact-tabs-two' : ''}`} role="tablist" aria-label={strings.privacySummary} onKeyDown={onTabKeyDown}>
       {tabs.map((tab, index) => <button key={tab.id} id={`${id}-${tab.id}-tab`} type="button" role="tab" aria-selected={selectedTab === tab.id} aria-controls={panelId} tabIndex={selectedTab === tab.id ? 0 : -1} onClick={() => activate(index)}>{tab.label}</button>)}
-    </div>
-    <div className="byos-signin-compact-panel" id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
+    </div>}
+    <div className="byos-signin-compact-panel" id={panelId} role={inline ? undefined : 'tabpanel'} aria-labelledby={inline ? undefined : activeTabId}>
       {selectedTab === 'signin' && <>
         {!available && <p className="byos-signin-unavailable" role="status">{strings.unavailable}</p>}
-        {showInitialDisclosure && props.disclosure && <p className="byos-signin-disclosure">{props.disclosure}</p>}
+        {!inline && showInitialDisclosure && disclosureNode}
         {props.connected ? <div className="byos-signin-connected byos-signin-compact-connected">
           <p role="status"><ByosIcon name="check"/> {strings.connectedStatus}</p>
           <button className="byos-signin-secondary" type="button" onClick={props.onDisconnect}>{strings.disconnect}</button>
@@ -275,15 +284,23 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
           <DeviceCodeStartButton props={props} available={available} label={!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}/>
         </>}
         {showContextualHelp && <details className="byos-signin-help"><summary>{strings.troubleSummary}</summary><p>{props.status === 'error' ? strings.troubleErrorBody ?? strings.troubleBody : strings.troubleBody}</p></details>}
+        {inline && !props.connected && <>
+          {disclosureNode}
+          {props.remember && <div className="byos-signin-storage byos-signin-compact-storage">
+            <label><input type="checkbox" checked={props.remember.checked} onChange={event => props.remember!.onChange(event.target.checked)}/><span>{strings.remember}</span></label>
+            {props.remember.error && <p className="byos-signin-storage-error" role="alert">{props.remember.error}</p>}
+          </div>}
+          {props.privacyDetails && <details className="byos-signin-privacy byos-signin-inline-privacy"><summary>{strings.privacySummary}</summary>{props.privacyDetails}</details>}
+        </>}
       </>}
-      {selectedTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>
+      {!inline && selectedTab === 'privacy' && <div className="byos-signin-compact-support" role="region" aria-label={strings.privacyTab} tabIndex={0}>
         {props.remember && <div className="byos-signin-storage byos-signin-compact-storage">
           <label><input type="checkbox" checked={props.remember.checked} onChange={event => props.remember!.onChange(event.target.checked)}/><span>{strings.remember}</span></label>
           {props.remember.error && <p className="byos-signin-storage-error" role="alert">{props.remember.error}</p>}
         </div>}
         <div className="byos-signin-compact-privacy-content">{props.privacyDetails ?? <p>{strings.privacySummary}</p>}</div>
       </div>}
-      {selectedTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
+      {!inline && selectedTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
     </div>
   </div>;
 }
