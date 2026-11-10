@@ -281,7 +281,7 @@
 .byos-connect .byos-signin { padding: 0; }
 
 /* Connect dialog: one primary button colour (--byos-primary, default the accent) and a steady height so tabs never move. */
-.byos-connect .byos-account-settings-panel { min-height: var(--byos-connect-panel-min-height, 24rem); }
+.byos-connect .byos-account-settings-panel { min-height: var(--byos-connect-panel-min-height, 28rem); }
 .byos-connect-remember-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; cursor: pointer; }
 .byos-connect-remember-check input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: var(--byos-accent, #2f5bd3); }
 .byos-connect-model-empty { margin: 0; padding: 12px; border: 1px dashed var(--byos-line-strong, #cdd2da); border-radius: var(--byos-radius, 8px); color: var(--byos-muted, #5a6272); font-size: 13px; line-height: 1.45; }

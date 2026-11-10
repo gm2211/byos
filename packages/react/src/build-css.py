@@ -12,7 +12,7 @@ DEFAULTS = {
   'surface-overlay': '#ffffff', 'surface-backdrop': 'rgb(0 0 0 / .35)',
   'pill-fill': 'var(--byos-surface, #ffffff)',
   'pill-border': 'var(--byos-accent, #2f5bd3)', 'pill-text': 'var(--byos-accent-strong, #2448ad)',
-  'connect-panel-min-height': '24rem', 'radius': '8px', 'radius-lg': '14px', 'shadow': '0 24px 60px -24px rgb(0 0 0 / .35)',
+  'connect-panel-min-height': '28rem', 'radius': '8px', 'radius-lg': '14px', 'shadow': '0 24px 60px -24px rgb(0 0 0 / .35)',
 }
 src = open(sys.argv[1]).read()
 def sub(m):
