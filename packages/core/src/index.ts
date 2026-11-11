@@ -12,3 +12,5 @@ export * from './provider-busy.js';
 export * from './claude-request.js';
 export * from './chatgpt-responses.js';
 export * from './request-pacer.js';
+export * from './model-names.js';
+export * from './repetition.js';

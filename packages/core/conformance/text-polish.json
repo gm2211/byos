@@ -1,0 +1,175 @@
+{
+  "_comment": "Model names and repetition trimming ported from Skim. Read by src/text-polish.test.ts and swift/Tests/ByosCoreTests/TextPolishTests.swift.",
+  "modelNames": [
+    {
+      "id": "claude-sonnet-5-5",
+      "expect": "Sonnet 5.5"
+    },
+    {
+      "id": "claude-opus-4-8",
+      "expect": "Opus 4.8"
+    },
+    {
+      "id": "claude-fable-5-1",
+      "expect": "Fable 5.1"
+    },
+    {
+      "id": "claude-opus-5",
+      "expect": "Opus 5"
+    },
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "expect": "Haiku 4.5"
+    },
+    {
+      "id": "claude-3-5-sonnet-latest",
+      "expect": "Sonnet 3.5"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5-5",
+      "expect": "Sonnet 5.5"
+    },
+    {
+      "id": "claude-sonnet-5-5:batch",
+      "expect": "Sonnet 5.5 (batch)"
+    },
+    {
+      "id": "gpt-4o-mini",
+      "expect": "GPT-4o mini"
+    },
+    {
+      "id": "gpt-5.1",
+      "expect": "GPT-5.1"
+    },
+    {
+      "id": "gpt-4o-2024-08-06",
+      "expect": "GPT-4o"
+    },
+    {
+      "id": "openai/gpt-5-1-codex",
+      "expect": "GPT-5.1 codex"
+    },
+    {
+      "id": "grok-4-1-fast-reasoning",
+      "expect": "Grok 4.1 Fast Reasoning"
+    },
+    {
+      "id": "meta-llama/llama-4-maverick",
+      "expect": "Llama 4 Maverick"
+    },
+    {
+      "id": "o3-mini",
+      "expect": "o3-mini"
+    },
+    {
+      "id": "my-custom-model",
+      "expect": "my-custom-model"
+    },
+    {
+      "id": "claude-instant",
+      "expect": "claude-instant"
+    },
+    {
+      "id": "",
+      "expect": ""
+    },
+    {
+      "id": "x-ai/grok-4-1-fast",
+      "expect": "Grok 4.1 Fast"
+    },
+    {
+      "id": "anthropic/claude-3-5-haiku-20241022",
+      "expect": "Haiku 3.5"
+    }
+  ],
+  "repetition": [
+    {
+      "name": "clean text is untouched",
+      "input": "The city council approved the new park budget. Residents welcomed the plan. Construction begins in spring.",
+      "expect": {
+        "text": "The city council approved the new park budget. Residents welcomed the plan. Construction begins in spring.",
+        "wasDegenerate": false
+      }
+    },
+    {
+      "name": "sentence loop is cut where it starts",
+      "input": "Protesters gathered downtown to voice their concerns. Organizers say turnout exceeded expectations. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. ",
+      "expect": {
+        "text": "Protesters gathered downtown to voice their concerns. Organizers say turnout exceeded expectations. The protest was held in the 21st century. ",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "alternating loop is cut",
+      "input": "The summit covered several policy areas. Delegates discussed trade first. Talks will continue tomorrow. No agreement was reached today. Talks will continue tomorrow. No agreement was reached today. Talks will continue tomorrow. No agreement was reached today. Talks will continue tomorrow. No agreement was reached today.",
+      "expect": {
+        "text": "The summit covered several policy areas. Delegates discussed trade first. Talks will continue tomorrow. No agreement was reached today.",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "substring loop keeps one unit",
+      "input": "Summary begins here with real content worth keepinglooplooplooplooplooplooplooplooplooplooplooplooplooplooplooplooplooploop",
+      "expect": {
+        "text": "Summary begins here with real content worth keepinglooplooploop",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "all repetition keeps the first sentence",
+      "input": "The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century. The protest was held in the 21st century.",
+      "expect": {
+        "text": "The protest was held in the 21st century. The protest was held in the 21st century.",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "empty stays empty",
+      "input": "",
+      "expect": {
+        "text": "",
+        "wasDegenerate": false
+      }
+    },
+    {
+      "name": "one sentence is untouched",
+      "input": "Just one short sentence.",
+      "expect": {
+        "text": "Just one short sentence.",
+        "wasDegenerate": false
+      }
+    },
+    {
+      "name": "two repeats are allowed",
+      "input": "Rain fell. Rain fell. Then the sun came out.",
+      "expect": {
+        "text": "Rain fell. Rain fell. Then the sun came out.",
+        "wasDegenerate": false
+      }
+    },
+    {
+      "name": "case and spacing do not hide a loop",
+      "input": "Intro here. The END is near.  the end   is near. THE END IS NEAR. ",
+      "expect": {
+        "text": "Intro here.",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "newlines split sentences",
+      "input": "Point one\nPoint two\nPoint two\nPoint two\n",
+      "expect": {
+        "text": "Point one",
+        "wasDegenerate": true
+      }
+    },
+    {
+      "name": "whitespace runs are not a loop",
+      "input": "Real words then                                                                                ",
+      "expect": {
+        "text": "Real words then                                                                                ",
+        "wasDegenerate": false
+      }
+    }
+  ]
+}
