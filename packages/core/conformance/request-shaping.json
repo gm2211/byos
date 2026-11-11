@@ -1,0 +1,494 @@
+{
+  "_comment": "Request shaping rules ported from Skim. Read by src/request-shaping.test.ts and swift/Tests/ByosCoreTests/RequestShapingTests.swift.",
+  "claudeModels": [
+    {
+      "model": "claude-sonnet-5-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-opus-5-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-sonnet-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-opus-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-fable-5-1",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": true
+    },
+    {
+      "model": "claude-opus-4-7",
+      "acceptsTemperature": false,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-opus-4-8",
+      "acceptsTemperature": false,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-some-future-model",
+      "acceptsTemperature": false,
+      "thinksByDefault": false
+    },
+    {
+      "model": "gpt-5",
+      "acceptsTemperature": false,
+      "thinksByDefault": false
+    },
+    {
+      "model": "CLAUDE",
+      "acceptsTemperature": false,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-opus-4-6",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-sonnet-4-20250514",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-3-5-sonnet-20241022",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "claude-3-haiku-20240307",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    },
+    {
+      "model": "Claude-Sonnet-4-6",
+      "acceptsTemperature": true,
+      "thinksByDefault": false
+    }
+  ],
+  "claudeBodies": [
+    {
+      "name": "5-series gets low effort and the floor",
+      "input": {
+        "model": "claude-sonnet-5-5",
+        "maxTokens": 850,
+        "temperature": 0,
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 4096,
+        "temperature": null,
+        "effort": "low",
+        "thinking": false,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "5-series keeps a bigger budget",
+      "input": {
+        "model": "claude-opus-5-5",
+        "maxTokens": 16000,
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 16000,
+        "temperature": null,
+        "effort": "low",
+        "thinking": false,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "4.6 keeps temperature and budget",
+      "input": {
+        "model": "claude-sonnet-4-6",
+        "maxTokens": 100,
+        "temperature": 0.3,
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 100,
+        "temperature": 0.3,
+        "effort": null,
+        "thinking": false,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "4.6 without a temperature gets the default",
+      "input": {
+        "model": "claude-haiku-4-5",
+        "maxTokens": 100,
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 100,
+        "temperature": 0.2,
+        "effort": null,
+        "thinking": false,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "4.8 gets neither temperature nor effort",
+      "input": {
+        "model": "claude-opus-4-8",
+        "maxTokens": 100,
+        "temperature": 0.3,
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 100,
+        "temperature": null,
+        "effort": null,
+        "thinking": false,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "chosen effort turns on adaptive thinking and drops temperature",
+      "input": {
+        "model": "claude-sonnet-4-6",
+        "maxTokens": 1000,
+        "temperature": 0.3,
+        "effort": "high",
+        "subscription": false,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 4096,
+        "temperature": null,
+        "effort": "high",
+        "thinking": true,
+        "system": "sys"
+      }
+    },
+    {
+      "name": "subscription opens with the Claude Code block",
+      "input": {
+        "model": "claude-sonnet-5-5",
+        "maxTokens": 5000,
+        "subscription": true,
+        "instructions": "sys"
+      },
+      "expect": {
+        "maxTokens": 5000,
+        "temperature": null,
+        "effort": "low",
+        "thinking": false,
+        "system": [
+          "You are Claude Code, Anthropic's official CLI for Claude.",
+          "sys"
+        ]
+      }
+    },
+    {
+      "name": "subscription without instructions sends only the block",
+      "input": {
+        "model": "claude-sonnet-5-5",
+        "maxTokens": 5000,
+        "subscription": true,
+        "instructions": ""
+      },
+      "expect": {
+        "maxTokens": 5000,
+        "temperature": null,
+        "effort": "low",
+        "thinking": false,
+        "system": [
+          "You are Claude Code, Anthropic's official CLI for Claude."
+        ]
+      }
+    }
+  ],
+  "claudeEmpty": [
+    {
+      "stopReason": "max_tokens",
+      "expect": "Claude ran out of room before it wrote an answer. Try again, or ask a narrower question."
+    },
+    {
+      "stopReason": "refusal",
+      "expect": "Claude declined to answer this. Try rephrasing the question."
+    },
+    {
+      "stopReason": "end_turn",
+      "expect": "The Claude response was empty."
+    },
+    {
+      "stopReason": null,
+      "expect": "The Claude response was empty."
+    }
+  ],
+  "chatgptBodies": [
+    {
+      "name": "single prompt",
+      "model": "gpt-5",
+      "instructions": "be brief",
+      "turns": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "expect": {
+        "model": "gpt-5",
+        "instructions": "be brief",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "hi"
+              }
+            ]
+          }
+        ],
+        "store": false,
+        "stream": true
+      }
+    },
+    {
+      "name": "system turn wins and assistant turns are output_text",
+      "model": "gpt-5",
+      "instructions": "fallback",
+      "turns": [
+        {
+          "role": "system",
+          "content": "from turns"
+        },
+        {
+          "role": "user",
+          "content": "q1"
+        },
+        {
+          "role": "assistant",
+          "content": "a1"
+        },
+        {
+          "role": "user",
+          "content": "q2"
+        }
+      ],
+      "expect": {
+        "model": "gpt-5",
+        "instructions": "from turns",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "q1"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "a1"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "q2"
+              }
+            ]
+          }
+        ],
+        "store": false,
+        "stream": true
+      }
+    },
+    {
+      "name": "empty system turn falls back to instructions",
+      "model": "gpt-5",
+      "instructions": "fallback",
+      "turns": [
+        {
+          "role": "system",
+          "content": ""
+        },
+        {
+          "role": "user",
+          "content": "q"
+        }
+      ],
+      "expect": {
+        "model": "gpt-5",
+        "instructions": "fallback",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "q"
+              }
+            ]
+          }
+        ],
+        "store": false,
+        "stream": true
+      }
+    }
+  ],
+  "chatgptStreams": [
+    {
+      "name": "deltas until completed",
+      "lines": [
+        "event: response.output_text.delta",
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hel\"}",
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"lo \"}",
+        "",
+        "data: {\"type\":\"response.completed\",\"response\":{}}",
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"ignored\"}"
+      ],
+      "expect": {
+        "text": "Hello"
+      }
+    },
+    {
+      "name": "completed without deltas reads the output",
+      "lines": [
+        "data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"A\"},{\"type\":\"reasoning\",\"text\":\"x\"},{\"type\":\"output_text\",\"text\":\"B\"}]}]}}"
+      ],
+      "expect": {
+        "text": "AB"
+      }
+    },
+    {
+      "name": "stream that never completes is cut off",
+      "lines": [
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}",
+        "data: [DONE]"
+      ],
+      "expect": {
+        "error": "ChatGPT's answer was cut off. Try again."
+      }
+    },
+    {
+      "name": "completed but empty",
+      "lines": [
+        "data: {\"type\":\"response.completed\",\"response\":{\"output\":[]}}"
+      ],
+      "expect": {
+        "error": "The ChatGPT response was empty."
+      }
+    },
+    {
+      "name": "incomplete with text keeps it",
+      "lines": [
+        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"some\"}",
+        "data: {\"type\":\"response.incomplete\",\"response\":{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}"
+      ],
+      "expect": {
+        "text": "some"
+      }
+    },
+    {
+      "name": "incomplete without text says why",
+      "lines": [
+        "data: {\"type\":\"response.incomplete\",\"response\":{\"incomplete_details\":{\"reason\":\"content_filter\"}}}"
+      ],
+      "expect": {
+        "error": "ChatGPT stopped before answering (content_filter)."
+      }
+    },
+    {
+      "name": "failed with a plan code",
+      "lines": [
+        "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\",\"message\":\"x\"}}}"
+      ],
+      "expect": {
+        "error": "Your ChatGPT plan's limit for Skim is used up. Raise it in ChatGPT's usage settings or wait for it to reset."
+      }
+    },
+    {
+      "name": "error event with a message",
+      "lines": [
+        "data: {\"type\":\"error\",\"code\":\"server_error\",\"message\":\"upstream\"}"
+      ],
+      "expect": {
+        "error": "ChatGPT couldn't run this request: upstream"
+      }
+    },
+    {
+      "name": "garbage lines are ignored",
+      "lines": [
+        "data: not json",
+        "data: 42",
+        ": keepalive",
+        "data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}]}}"
+      ],
+      "expect": {
+        "text": "ok"
+      }
+    }
+  ],
+  "chatgptErrors": [
+    {
+      "code": "subscription_sharing_user_not_eligible",
+      "message": null,
+      "expect": "This ChatGPT account's plan can't be used in other apps. Plus and Pro plans can."
+    },
+    {
+      "code": "subscription_sharing_user_unavailable",
+      "message": null,
+      "expect": "ChatGPT plan usage is unavailable right now. Try again shortly."
+    },
+    {
+      "code": "chatpass_v2_scope_not_authorized",
+      "message": "x",
+      "expect": "ChatGPT needs you to sign in again. Open Settings to reconnect."
+    },
+    {
+      "code": null,
+      "message": null,
+      "expect": "ChatGPT couldn't run this request. Try again."
+    },
+    {
+      "code": "other",
+      "message": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expect": "ChatGPT couldn't run this request: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…"
+    }
+  ],
+  "appName": "Skim"
+}

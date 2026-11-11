@@ -259,6 +259,31 @@ if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCod
 
 Both packages test against `packages/core/conformance/provider-busy.json`.
 
+## Request shaping and lanes
+
+Build Claude and ChatGPT-plan bodies with the shared rules instead of by hand. Each one is a fix for a failure Skim hit: a `temperature` field 400s on Claude 4.7+ and the 5-series; a 5-series model can spend a small `max_tokens` on thinking and return nothing; a subscription token without the Claude Code block gets a bare 429; ChatGPT plan usage rejects sampling fields and is only finished at `response.completed`.
+
+```ts
+import { ChatGPTResponsesStream, requestPacer, shapeChatGPTBody, shapeClaudeBody } from '@byos/core';
+
+const claudeBody = shapeClaudeBody({ model, messages, instructions, subscription: true, maxTokens: 850 });
+const chatgptBody = shapeChatGPTBody({ model, instructions, turns });
+const stream = new ChatGPTResponsesStream('My App');
+for (const line of lines) if (stream.consume(line)) break;
+const answer = stream.finish(); // throws ChatGPTResponseError with a sentence to show
+
+// Background work (ratings, digests) waits while the person's own request is in flight.
+await requestPacer.run('background', () => sendRetryingWhenBusy(send, { provider, lane: 'background' }));
+```
+
+```swift
+let body = ClaudeRequest.body(model: model, messages: messages, instructions: instructions, subscription: true, maxTokens: 850)
+var stream = ChatGPTResponses.Stream(appName: "My App")
+let answer = try await RequestPacer.shared.run(.foreground) { try await send(body) }
+```
+
+Both packages test against `packages/core/conformance/request-shaping.json`.
+
 ## On-device models
 
 Keep execution location separate from subscription sign-in. Embedded models, MLX and Apple Intelligence need no account or token. Use the native catalog only for a user-owned application runtime with installed engine bindings:
