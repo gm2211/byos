@@ -11,6 +11,7 @@ import { AiProviderPicker } from '../dist/AiProviderPicker.js';
 import { DeviceCodeSignIn } from '../dist/DeviceCodeSignIn.js';
 import { PasteCodeSignIn } from '../dist/PasteCodeSignIn.js';
 import { SignInWithChatGPT } from '../dist/SignInWithChatGPT.js';
+import { CredentialModePicker } from '../dist/CredentialModePicker.js';
 
 test('AiAccountSettings starts on Model, exposes provider switching, and mounts one settings pane', () => {
   const html = renderToStaticMarkup(createElement(AiAccountSettings, {
@@ -511,4 +512,36 @@ test('AiConnectPanel binds the expired banner to redirect sign-in by default', (
   const html = connectPanel({ selectedId: 'acme', services });
   assert.match(html, /class="byos-account-settings-reconnect" disabled="" aria-busy="true"/);
   assert.match(html, /Connecting…<\/button>/);
+});
+
+test('AiConnectPanel in subscription mode hides key forms and drops key-only services', () => {
+  const keyOnly = connectService({ provider: { id: 'keys', displayName: 'Keys Inc', signIn: [{ kind: 'api-key', hint: 'A key' }] } });
+  const local = connectService({ provider: { id: 'local', displayName: 'On this device', signIn: [] } });
+  const picker = connectPanel({ credentialMode: 'subscription', services: [connectService(), keyOnly, local] });
+  assert.match(picker, /Acme AI/);
+  assert.match(picker, /On this device/);
+  assert.doesNotMatch(picker, /Keys Inc/);
+  const account = connectPanel({ credentialMode: 'subscription', selectedId: 'acme' });
+  assert.match(account, /byos-signin/);
+  assert.doesNotMatch(account, /byos-connect-key|type="password"|API key/);
+  assert.equal(connectPanel({ credentialMode: 'subscription', selectedId: 'keys', services: [keyOnly] }).includes('Keys Inc'), false);
+});
+
+test('AiConnectPanel in api-key mode keeps only key forms; the default keeps everything', () => {
+  const keys = connectPanel({ credentialMode: 'api-key', selectedId: 'acme' });
+  assert.match(keys, /byos-connect-key/);
+  assert.doesNotMatch(keys, /byos-signin|byos-connect-or/);
+  const both = connectPanel({ selectedId: 'acme' });
+  assert.match(both, /byos-signin/);
+  assert.match(both, /byos-connect-key/);
+});
+
+test('CredentialModePicker is a radio group with the chosen mode checked', () => {
+  const html = renderToStaticMarkup(createElement(CredentialModePicker, { value: 'subscription', onChange: connectNoop }));
+  assert.match(html, /role="radiogroup" aria-label="How people connect AI"/);
+  assert.equal([...html.matchAll(/role="radio"/g)].length, 3);
+  assert.match(html, /aria-checked="true"[^>]*><span[^>]*>Subscriptions only</);
+  const two = renderToStaticMarkup(createElement(CredentialModePicker, { value: 'api-key', onChange: connectNoop, modes: ['subscription', 'api-key'], strings: { names: { 'api-key': 'Keys' } } }));
+  assert.equal([...two.matchAll(/role="radio"/g)].length, 2);
+  assert.match(two, /aria-checked="true"[^>]*><span[^>]*>Keys</);
 });

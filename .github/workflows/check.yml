@@ -31,3 +31,9 @@ jobs:
       - run: sh packages/mlx-local/scripts/build-bridge.sh
       - run: test -x packages/mlx-local/bin/byos-mlx && test -f packages/mlx-local/bin/mlx.metallib
       - run: echo '{"id":"1","op":"hello"}' | packages/mlx-local/bin/byos-mlx --models-dir "$RUNNER_TEMP/mlx" | grep '"protocol":1'
+  swift-core:
+    # ByosCore, the Swift side of @byos/core, against the shared conformance vectors.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path packages/core/swift

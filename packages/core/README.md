@@ -17,6 +17,13 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   vectors that other implementations (Swift, Rust, Python) can check themselves against. Live xAI
   behavior is unverified; the endpoints are undocumented and can change.
 - `ByosProvider` types: the contract each provider adapter implements.
+- Credential mode (`CredentialMode`: `subscription-and-api-key`, `subscription`, `api-key`):
+  `providersForCredentialMode`, `signInMethodsFor`, `allowsSignInMethod`, `credentialKind`,
+  `parseCredentialMode` and the request guard `assertCredentialAllowed` (`CredentialModeError`). Pass
+  the same mode to `AiConnectPanel` (`credentialMode`). Vectors: `conformance/credential-mode.json`.
+- `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
+  (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`), tested against the same
+  vectors (`swift test --package-path packages/core/swift`).
 
 ## Token rule
 

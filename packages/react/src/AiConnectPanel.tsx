@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import type { ByosProvider, SignInMethod } from '@byos/core';
+import { DEFAULT_CREDENTIAL_MODE, providersForCredentialMode, type ByosProvider, type CredentialMode, type SignInMethod } from '@byos/core';
 import { AiAccountSettings } from './AiAccountSettings.js';
 import { AiProviderPicker } from './AiProviderPicker.js';
 import { DeviceCodeSignIn, type DeviceCodeSignInProps } from './DeviceCodeSignIn.js';
@@ -136,9 +136,21 @@ export type AiConnectPanelProps = {
   /** Content of the third ("Preferences") tab. Omitted: no tab. */
   preferences?: ReactNode;
   recoveryAction?: ReactNode;
+  /**
+   * Which credentials people may connect (default `subscription-and-api-key`). `subscription` hides
+   * every API key form and drops services that only take a key; `api-key` keeps only key forms.
+   * Credential-free services (no sign-in methods) always stay. See `providersForCredentialMode`.
+   */
+  credentialMode?: CredentialMode;
   strings?: Partial<AiConnectPanelStrings>;
   className?: string;
 };
+
+/** `services` as `mode` allows them: each keeps only its allowed sign-in methods, and one left with none is dropped. */
+export function servicesForCredentialMode(services: readonly AiConnectService[], mode: CredentialMode): AiConnectService[] {
+  return services.flatMap(service => providersForCredentialMode([service.provider], mode)
+    .map(provider => provider === service.provider ? service : { ...service, provider }));
+}
 
 function KeyForm(props: { method: Extract<SignInMethod, { kind: 'api-key' | 'paste-token' }>; form: AiConnectKeyForm; label: string; strings: AiConnectPanelStrings }) {
   const { method, form, label, strings } = props;
@@ -229,7 +241,8 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
   const generatedId = useId();
   const headingId = props.headingId ?? `${generatedId}-heading`;
   const [changing, setChanging] = useState(false);
-  const service = props.services.find(candidate => candidate.provider.id === props.selectedId);
+  const services = servicesForCredentialMode(props.services, props.credentialMode ?? DEFAULT_CREDENTIAL_MODE);
+  const service = services.find(candidate => candidate.provider.id === props.selectedId);
   const className = `byos byos-connect${props.className ? ` ${props.className}` : ''}`;
 
   if (!service || changing) {
@@ -239,7 +252,7 @@ export function AiConnectPanel(props: AiConnectPanelProps) {
       {props.intro != null && <div className="byos-connect-intro">{props.intro}</div>}
       <AiProviderPicker
         className="byos-connect-picker"
-        providers={props.services.map(entry => ({ id: entry.provider.id, name: entry.provider.displayName, badge: entry.badge }))}
+        providers={services.map(entry => ({ id: entry.provider.id, name: entry.provider.displayName, badge: entry.badge }))}
         selectedId={props.selectedId}
         onSelect={id => { setChanging(false); props.onSelect(id); }}
         strings={{ label: strings.pickerLabel, selected: strings.selected }}

@@ -142,6 +142,45 @@ for await (const event of provider.stream(credential, {
 
 Model discovery and inference go directly from the browser to the selected provider. Pass cancellation through both; abandoning an iterator cancels its response reader. Keep tool orchestration and product-specific prompts in the browser application. Sign-in is a separate flow: `grok()` enables its site-assisted device-code handshake by default (`handshakeViaSite: true`), while its model requests remain browser-direct. Do not add a backend inference relay.
 
+## Subscriptions, API keys, or both
+
+Each application picks a credential mode, one setting that governs every surface:
+
+| Mode | Offers | Hides |
+| --- | --- | --- |
+| `subscription-and-api-key` (default) | plan sign-ins and API key fields | nothing |
+| `subscription` | plan sign-ins (device code, PKCE, pasted subscription token) | every API key field; key-only providers |
+| `api-key` | API key fields | plan sign-ins; sign-in-only providers |
+
+Credential-free providers (on-device models, `signIn: []`) stay in every mode.
+
+**Web.** Filter the provider list, render the panel in that mode, and guard request paths so a key saved under an earlier mode is never sent:
+
+```ts
+import { assertCredentialAllowed, providersForCredentialMode, type CredentialMode } from '@byos/core';
+import { AiConnectPanel, CredentialModePicker } from '@byos/react';
+
+const mode: CredentialMode = 'subscription';
+const offered = providersForCredentialMode(allProviders, mode); // copies, with only allowed sign-in methods
+<AiConnectPanel credentialMode={mode} services={services} selectedId={id} onSelect={setId}/>;
+assertCredentialAllowed(mode, storedCredential.kind); // throws CredentialModeError ('api-key' in subscription mode)
+```
+
+`CredentialModePicker` is an optional radio group for an admin, developer or settings screen that lets someone change the mode; the host stores the choice.
+
+**iOS and macOS (Swift).** `packages/core/swift` is the `ByosCore` Swift package with the same API and raw values:
+
+```swift
+import ByosCore
+
+let mode = CredentialMode(parsing: storedValue, fallback: .subscription)
+let offered = mode.providers(allProviders)        // any SignInDeclaring type, or ProviderDescriptor
+let showKeyField = mode.allows(.apiKey)
+try mode.require(.apiKey)                         // CredentialModeError before a stored key is sent
+```
+
+Add it as a local SwiftPM package (a vendored copy lands at `<prefix>core/swift`). Both packages test against `packages/core/conformance/credential-mode.json`, so the web and Swift behavior cannot drift apart.
+
 ## On-device models
 
 Keep execution location separate from subscription sign-in. Embedded models, MLX and Apple Intelligence need no account or token. Use the native catalog only for a user-owned application runtime with installed engine bindings:
