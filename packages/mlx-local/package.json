@@ -1,0 +1,33 @@
+{
+  "name": "@byos/mlx-local",
+  "version": "0.1.0",
+  "description": "Node-only on-device inference for Apple silicon Macs: MLX models and Apple Intelligence through the bundled byos-mlx Swift helper.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "node": "./dist/index.js"
+    }
+  },
+  "byos": {
+    "runtime": "node"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:bridge": "sh scripts/build-bridge.sh",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@byos/core": "file:../core",
+    "@byos/providers": "file:../providers"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

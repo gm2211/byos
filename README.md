@@ -18,6 +18,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/chatgpt-local` | Official ChatGPT plan sign-in for local Node apps; Keychain and direct HTTPS, no tunnel |
 | `@byos/claude-local` | Claude Pro/Max subscription sign-in for local Node apps; Keychain, loopback OAuth with a paste-code fallback, direct HTTPS |
 | `@byos/grok-local` | Grok (xAI SuperGrok) subscription sign-in for local Node apps; device-code OAuth, Keychain, direct refresh against `auth.x.ai` |
+| `@byos/mlx-local` | On-device inference for local Node apps on Apple silicon Macs: MLX models and Apple Intelligence through a bundled Swift helper (Skim's engine) |
 | `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
 | `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in and Grok subscription refresh) plus credential-free on-device catalog and native bridge adapters |
@@ -35,7 +36,7 @@ Each package README documents its API. [Customization recipes](docs/customizatio
 
 `@byos/providers` includes Local (Embedded), On-device (MLX), and Apple Intelligence. These are credential-free execution options, not subscription services. `onDeviceProvidersFor` exposes only providers explicitly supported by a native application binding; browser and hosted-server runtimes receive an empty list. Existing browser provider defaults do not change.
 
-`createOnDeviceProvider` adapts a host's local model discovery, readiness and streaming implementation. BYOS does not bundle llama.cpp, MLX, or Apple's Foundation Models framework. Native apps supply their engine/IPC bridge and perform hardware, OS, model-download and readiness checks. Merely running a web app on a Mac does not grant a native bridge. No hosted inference endpoint or cloud fallback is used. See [native binding recipe](docs/customization.md#on-device-models).
+`createOnDeviceProvider` adapts a host's local model discovery, readiness and streaming implementation. For local Node apps on Apple silicon Macs, `@byos/mlx-local` is a ready bridge: it runs MLX models and Apple's on-device model through the `byos-mlx` Swift helper (the engine Skim ships), with model download and management. BYOS does not bundle llama.cpp. Other native apps supply their own engine/IPC bridge, or drive `byos-mlx` over its documented protocol, and perform hardware, OS, model-download and readiness checks. Merely running a web app on a Mac does not grant a native bridge. No hosted inference endpoint or cloud fallback is used. See [native binding recipe](docs/customization.md#on-device-models).
 
 ## Use a Claude Pro/Max subscription locally
 
