@@ -174,15 +174,20 @@ final class RequestShapingTests: XCTestCase {
 
     // MARK: - Pacer
 
-    private func settle() async {
-        for _ in 0..<20 { await Task.yield() }
+    /// Waits until `count` background requests are queued on `pacer`. A new Task reaches the actor
+    /// on the executor's schedule, so a fixed number of yields is not enough on a busy CI runner.
+    private func waitForWaiters(_ count: Int, on pacer: RequestPacer) async {
+        for _ in 0..<2_000 {
+            if await pacer.waitingInBackground >= count { return }
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
     }
 
     func testBackgroundWaitsWhileForegroundRuns() async {
         let pacer = RequestPacer()
         await pacer.start(.foreground)
         let background = Task { await pacer.start(.background) }
-        await settle()
+        await waitForWaiters(1, on: pacer)
         let waiting = await pacer.waitingInBackground
         XCTAssertEqual(waiting, 1)
         await pacer.finish(.foreground)
@@ -195,7 +200,7 @@ final class RequestShapingTests: XCTestCase {
         let pacer = RequestPacer()
         await pacer.start(.background)
         let second = Task { await pacer.start(.background) }
-        await settle()
+        await waitForWaiters(1, on: pacer)
         let waiting = await pacer.waitingInBackground
         XCTAssertEqual(waiting, 1)
         await pacer.finish(.background)
@@ -210,7 +215,7 @@ final class RequestShapingTests: XCTestCase {
         let inFlight = await pacer.inFlightInBackground
         XCTAssertEqual(inFlight, 3)
         let fourth = Task { await pacer.start(.background, width: 3) }
-        await settle()
+        await waitForWaiters(1, on: pacer)
         let waiting = await pacer.waitingInBackground
         XCTAssertEqual(waiting, 1)
         await pacer.reset()

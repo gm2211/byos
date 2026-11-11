@@ -33,10 +33,13 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   `store: false`, done only at `response.completed`, plan error codes as sentences), and
   `RequestPacer` (background work waits for the person's requests). Vectors:
   `conformance/request-shaping.json`.
+- Text polish: `friendlyModelName` ("claude-sonnet-5-5" is "Sonnet 5.5", "gpt-4o-mini" is "GPT-4o
+  mini") and `trimDegenerateRepetition` (cuts the sentence and token loops small models fall into).
+  Vectors: `conformance/text-polish.json`.
 - `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
   (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`) and the same busy rules
 (`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the same request
-  shaping (`ClaudeRequest.body`, `ChatGPTResponses.body`, `ChatGPTResponses.Stream`, `RequestPacer`), the Grok,
+  shaping (`ClaudeRequest.body`, `ChatGPTResponses.body`, `ChatGPTResponses.Stream`, `RequestPacer`), `ModelNames.friendly` and `RepetitionTrim.trim`, the Grok,
   Claude and ChatGPT plan sign-ins (`XAISignIn`, `ClaudeSignIn`, `ChatGPTSignIn` and their pure
   `XAIOAuth`, `ClaudeOAuth`, `ChatGPTOAuth` halves) and token stores (`KeychainTokenStore`,
   `MemoryTokenStore`), tested against the same
