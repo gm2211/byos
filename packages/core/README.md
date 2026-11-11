@@ -29,8 +29,9 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   `conformance/provider-busy.json`.
 - `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
   (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`) and the same busy rules
-(`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the Grok
-  and Claude subscription sign-ins (`XAISignIn`, `XAIOAuth`, `ClaudeSignIn`, `ClaudeOAuth`) and token stores (`KeychainTokenStore`,
+(`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the Grok,
+  Claude and ChatGPT plan sign-ins (`XAISignIn`, `ClaudeSignIn`, `ChatGPTSignIn` and their pure
+  `XAIOAuth`, `ClaudeOAuth`, `ChatGPTOAuth` halves) and token stores (`KeychainTokenStore`,
   `MemoryTokenStore`), tested against the same
   vectors (`swift test --package-path packages/core/swift`).
 

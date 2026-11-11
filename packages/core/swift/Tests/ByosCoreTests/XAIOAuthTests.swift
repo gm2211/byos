@@ -104,7 +104,7 @@ final class XAIOAuthTests: XCTestCase {
             { request in
                 let reply: Reply = self.lock.withLock {
                     self.requests.append(request)
-                    return self.replies.removeFirst()
+                    return self.replies.isEmpty ? .json(599, "{}") : self.replies.removeFirst()
                 }
                 switch reply {
                 case .error(let error): throw error

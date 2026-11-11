@@ -26,6 +26,20 @@ Choose a stable namespace per consumer; it separates account registration, host 
 
 Use package-mode full-SHA vendoring with `--packages chatgpt-local --engine omit`. Browser bundle mode rejects Node-only packages. Enable the new path explicitly; this does not change existing browser provider storage or relay bindings.
 
+
+**iOS and macOS (Swift).** `ByosCore` has the same plan sign-in natively: a loopback listener on `127.0.0.1` (port 1455, else 54321), the registration kept across sign-outs as OpenAI asks, and refreshes shared between concurrent callers because ChatGPT refresh tokens rotate:
+
+```swift
+import ByosCore
+
+let chatgpt = ChatGPTSignIn(appName: "My App",
+    store: KeychainTokenStore(service: "com.example.app.chatgpt"),
+    registration: KeychainChatGPTRegistrationStore(service: "com.example.app.chatgpt"))
+try await chatgpt.signIn { url in presentInAppBrowser(url) } // keep the app in front so the listener stays up
+let token = try await chatgpt.accessToken()                  // refreshed with under two minutes left
+```
+
+Sign-in checks the callback state, a returning account's client id, the ID token's issuer, audience, nonce and expiry, and that plan usage (`chatgpt.tokens.use.direct`) was granted.
 ## Claude subscription in a browser app
 
 The OAuth endpoints (authorize `https://claude.com/cai/oauth/authorize`, paste redirect `https://platform.claude.com/oauth/code/callback`, token `https://platform.claude.com/v1/oauth/token`) come from the Claude Code CLI's embedded strings (checked against CLI 2.1.316), are undocumented and can change. Re-check with `strings $(readlink -f $(which claude)) | grep oauth`.
