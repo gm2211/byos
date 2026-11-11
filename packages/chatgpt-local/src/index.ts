@@ -1,5 +1,6 @@
 /** Node-only, independently implemented public SIWC protocol. No Codex or DevKit credentials/code. */
 import { randomUUID } from 'node:crypto';
+import { friendlyModelName, ProviderBusyError, sendRetryingWhenBusy, type BusyProvider, type RequestLane } from '@byos/core';
 import { ChatGptError, checkSignal } from './errors.js';
 import { keychainStore, processLock, type CredentialStore } from './storage.js';
 import { authorize, discover, verifyIdentity } from './oauth.js';
@@ -27,7 +28,7 @@ export interface ChatGptClient {
   signIn(options?: { signal?: AbortSignal; accountId?: string; enablePlan?: boolean }): Promise<ChatGptStatus>;
   disconnect(): Promise<{ revoked: boolean }>;
   listModels(signal?: AbortSignal): Promise<ChatGptModel[]>;
-  generate(request: { model: string; input: string; instructions?: string; signal?: AbortSignal; onProgress?: (progress: GenerationProgress) => void }): Promise<{ text: string }>;
+  generate(request: { model: string; input: string; instructions?: string; /** `lane: 'background'` fails fast while the provider cools down instead of waiting. */ lane?: 'foreground' | 'background'; signal?: AbortSignal; onProgress?: (progress: GenerationProgress) => void }): Promise<{ text: string }>;
 }
 type Tokens = { access: string; refresh?: string; id?: string; expiresAt: number; scopes: string[]; earliestRefreshAt?: number };
 type Registration = { id: string; label: string; clientId: string; subject?: string; tokens?: Tokens };
@@ -71,6 +72,14 @@ function tokensFrom(value: Record<string, unknown>, now: number, previous?: Toke
   };
 }
 const activeRequests = new Map<string, Set<{ id?: string; controller: AbortController }>>();
+
+const CHATGPT_BUSY: BusyProvider = { name: 'ChatGPT', credential: 'subscription' };
+
+/** Asks again while ChatGPT is busy or the connection drops; a lasting limit becomes `quota` (fixed text: core's busy sentence can quote the provider). */
+async function busyRetried(send: () => Promise<Response>, lane: RequestLane | undefined, signal: AbortSignal | undefined): Promise<Response> {
+  try { return await sendRetryingWhenBusy(send, { provider: CHATGPT_BUSY, lane, signal }); }
+  catch (e) { if (e instanceof ProviderBusyError) throw new ChatGptError('quota', 429, { cause: e }); throw e; }
+}
 
 export function createChatGptClient(options: ChatGptClientOptions): ChatGptClient {
   if (!text(options.appName, 100) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(options.namespace) || typeof options.openBrowser !== 'function') throw new TypeError('A valid appName, namespace and openBrowser are required.');
@@ -205,13 +214,13 @@ export function createChatGptClient(options: ChatGptClientOptions): ChatGptClien
       const seen = new Set<string>(); const models: ChatGptModel[] = [];
       for (const m of body.models) {
         if (!record(m) || !text(m.slug, 128) || /\s/.test(m.slug) || m.visibility !== 'list' || seen.has(m.slug)) continue;
-        models.push({ id: m.slug, name: text(m.display_name, 256) ? m.display_name : m.slug }); seen.add(m.slug);
+        models.push({ id: m.slug, name: text(m.display_name, 256) ? m.display_name : friendlyModelName(m.slug) }); seen.add(m.slug);
       }
       if (!models.length) throw new ChatGptError('unsupported'); return models;
     }, signal),
     generate: input => provider(async (t, signal) => {
       if (!text(input.model, 128) || /\s/.test(input.model) || typeof input.input !== 'string' || !input.input.trim() || input.input.length > 1_000_000 || (input.instructions !== undefined && (typeof input.instructions !== 'string' || input.instructions.length > 1_000_000))) throw new ChatGptError('unsupported');
-      const response = await request(fetcher, `${RESOURCE}/responses`, { method: 'POST', headers: { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ model: input.model, input: [{ role: 'user', content: [{ type: 'input_text', text: input.input }] }], ...(input.instructions ? { instructions: input.instructions } : {}), store: false, stream: true }) }, signal, 10 * 60_000);
+      const response = await busyRetried(() => request(fetcher, `${RESOURCE}/responses`, { method: 'POST', headers: { Authorization: `Bearer ${t.access}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ model: input.model, input: [{ role: 'user', content: [{ type: 'input_text', text: input.input }] }], ...(input.instructions ? { instructions: input.instructions } : {}), store: false, stream: true }) }, signal, 10 * 60_000), input.lane, signal);
       await ensureOk(response);
       const result = await completedText(response, [t.access, t.refresh ?? '', t.id ?? ''], signal, input.onProgress);
       return { text: result };

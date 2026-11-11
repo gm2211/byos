@@ -121,7 +121,7 @@ test('thinksByDefault', () => {
 test('listModels reads the live list', async t => {
   const { client } = await fixture(t);
   await client.signIn();
-  assert.deepEqual(await client.listModels(), [{ id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' }, { id: 'claude-haiku-4-5', name: 'claude-haiku-4-5' }]);
+  assert.deepEqual(await client.listModels(), [{ id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' }, { id: 'claude-haiku-4-5', name: 'Haiku 4.5' }]);
 });
 
 test('an expired token refreshes with the rotated replacement; a rejected refresh requires sign-in', async t => {
@@ -177,4 +177,13 @@ test('disconnect removes the tokens', async t => {
   await client.signIn(); await client.disconnect();
   assert.equal((await client.status()).connected, false);
   assert.ok(!saved()!.includes('access-1'));
+});
+
+test('an empty answer names why Claude stopped', async t => {
+  const { busyCooldowns } = await import('@byos/core');
+  busyCooldowns.clear('Claude'); // the rate-limit test above leaves Claude cooling down, as it would in a real process
+  const { client, c } = await fixture(t);
+  c.sse = [{ type: 'message_start' }, { type: 'message_delta', delta: { stop_reason: 'max_tokens' } }, { type: 'message_stop' }].map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
+  await client.signIn();
+  await assert.rejects(client.generate({ model: 'm', input: 'x' }), (e: ClaudeError) => e.code === 'invalid-response' && e.message === 'Claude ran out of room before it wrote an answer. Try again, or ask a narrower question.');
 });

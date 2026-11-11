@@ -545,3 +545,19 @@ test('CredentialModePicker is a radio group with the chosen mode checked', () =>
   assert.equal([...two.matchAll(/role="radio"/g)].length, 2);
   assert.match(two, /aria-checked="true"[^>]*><span[^>]*>Keys</);
 });
+
+test('ModelEffortPicker names a model whose label is just its id, and keeps real labels', () => {
+  const html = renderToStaticMarkup(createElement(ModelEffortPicker, {
+    providerName: 'Grok',
+    models: [{ value: 'grok-4-fast', label: 'grok-4-fast' }, { value: 'x-1', label: 'House Model' }],
+    model: 'grok-4-fast',
+    onModelChange: () => undefined,
+    efforts: [],
+    effort: '',
+    onEffortChange: () => undefined,
+    renderSelect: ({ options }) => createElement('ul', null, options.map(o => createElement('li', { key: o.value }, o.label))),
+  }));
+  assert.match(html, /<li>Grok 4 Fast<\/li>/);
+  assert.match(html, /<li>House Model<\/li>/);
+  assert.doesNotMatch(html, /<li>grok-4-fast<\/li>/);
+});

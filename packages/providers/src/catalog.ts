@@ -1,3 +1,4 @@
+import { friendlyModelName } from '@byos/core';
 import type { CloudEndpoint } from './endpoints.js';
 import { PROVIDER_BASE_URLS } from './endpoints.js';
 import { ProviderRequestError, safeProviderErrorText } from './chat.js';
@@ -170,5 +171,5 @@ export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: Ab
       seen.add(model.id);
       return true;
     }))
-    .map(model => ({ id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false }));
+    .map(model => ({ id: model.id, name: model.name && model.name !== model.id ? model.name : friendlyModelName(model.id), analysisFit: 'standard' as const, reasoning: false }));
 }
