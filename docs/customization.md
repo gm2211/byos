@@ -169,7 +169,17 @@ if (status.available) {
 }
 ```
 
-The `nativeModelService` is supplied by the application, not BYOS. It must execute locally and honor cancellation. Use your llama.cpp binding for `local`, MLX binding for `mlx`, and Foundation Models binding for `foundation-models`. Readiness must reflect actual hardware/OS support, model installation, and feature enablement; a user-agent or provider ID is not evidence of availability. Apple Intelligence bindings should refresh status from `SystemLanguageModel.default.availability`. Keep platform model catalogs and download UX in the host.
+On an Apple silicon Mac, a local Node app can skip writing the service: `@byos/mlx-local` supplies the `mlx` and `foundation-models` bridges, model downloads and status (see its README).
+
+```ts
+import { createMlxLocal } from '@byos/mlx-local';
+
+const local = createMlxLocal({ modelsDir }); // modelsDir is optional; share it between apps to share downloads
+await local.status();
+const provider = local.provider('mlx');      // same OnDeviceProvider as above
+```
+
+Otherwise the `nativeModelService` is supplied by the application. It must execute locally and honor cancellation. Use your llama.cpp binding for `local`, MLX binding for `mlx`, and Foundation Models binding for `foundation-models`. Readiness must reflect actual hardware/OS support, model installation, and feature enablement; a user-agent or provider ID is not evidence of availability. Apple Intelligence bindings should refresh status from `SystemLanguageModel.default.availability`. Keep platform model catalogs and download UX in the host.
 
 For browser or hosted-server apps, pass `{ kind: 'browser', supportedProviders: [] }` or `{ kind: 'server', supportedProviders: [] }`. Both return no on-device options and reject discovery/inference even when a bridge is supplied. A future browser engine needs a separate explicit capability contract; this native adapter does not enable it. Existing browser subscription/API adapters keep their credential and transport boundaries. Do not route native prompts to a hosted service or silently switch provider/billing when unavailable.
 

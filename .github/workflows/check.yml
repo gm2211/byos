@@ -22,3 +22,12 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install 1.94.1 --profile minimal
       - run: cargo +1.94.1 test --manifest-path packages/browser-tls/rust/Cargo.toml --locked
+  mlx-helper:
+    # Compiles the Swift helper and its Metal kernels. Hosted runners have no usable GPU for
+    # MLX, so generation itself is verified on a real Mac (packages/mlx-local/scripts/smoke.mjs).
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh packages/mlx-local/scripts/build-bridge.sh
+      - run: test -x packages/mlx-local/bin/byos-mlx && test -f packages/mlx-local/bin/mlx.metallib
+      - run: echo '{"id":"1","op":"hello"}' | packages/mlx-local/bin/byos-mlx --models-dir "$RUNNER_TEMP/mlx" | grep '"protocol":1'
