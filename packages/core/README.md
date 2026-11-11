@@ -36,10 +36,15 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - Text polish: `friendlyModelName` ("claude-sonnet-5-5" is "Sonnet 5.5", "gpt-4o-mini" is "GPT-4o
   mini") and `trimDegenerateRepetition` (cuts the sentence and token loops small models fall into).
   Vectors: `conformance/text-polish.json`.
+- Link health and offline fallback: `linkVerdict`, `isBadProbe`, `adaptiveHedgeMs` and `watchLink` tell a
+  dead or poor link from a slow model (two bad probes in a row; on Wi-Fi only failed ones count), and
+  `runWithOfflineFallback` reruns a request on an on-device model only when the link is really gone,
+  turning a timeout on a healthy link into a `ProviderFailure`. Vectors: `conformance/link-health.json`.
 - `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
   (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`) and the same busy rules
 (`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the same request
-  shaping (`ClaudeRequest.body`, `ChatGPTResponses.body`, `ChatGPTResponses.Stream`, `RequestPacer`), `ModelNames.friendly` and `RepetitionTrim.trim`, the Grok,
+  shaping (`ClaudeRequest.body`, `ChatGPTResponses.body`, `ChatGPTResponses.Stream`, `RequestPacer`), `ModelNames.friendly` and `RepetitionTrim.trim`, `LinkHealth`, `LinkProbe.handshakeRTT` and
+  `OfflineFallback.run`, the Grok,
   Claude and ChatGPT plan sign-ins (`XAISignIn`, `ClaudeSignIn`, `ChatGPTSignIn` and their pure
   `XAIOAuth`, `ClaudeOAuth`, `ChatGPTOAuth` halves) and token stores (`KeychainTokenStore`,
   `MemoryTokenStore`), tested against the same
