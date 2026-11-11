@@ -242,6 +242,7 @@ final class Tasks: @unchecked Sendable {
     func add(_ id: String, _ task: Task<Void, Never>) { lock.withLock { running[id] = task } }
     func remove(_ id: String) { lock.withLock { running[id] = nil } }
     func cancel(_ id: String) { lock.withLock { running[id] }?.cancel() }
+    var isEmpty: Bool { lock.withLock { running.isEmpty } }
 }
 
 let tasks = Tasks()
@@ -278,7 +279,9 @@ DispatchQueue.global().async {
         tasks.add(request.id, task)
         gate.unlock()
     }
-    // stdin closed: the client is gone.
+    // stdin closed: no more requests. Finish the ones in flight (a client
+    // may pipe requests and close its end), then exit.
+    while !tasks.isEmpty { usleep(20_000) }
     exit(0)
 }
 dispatchMain()

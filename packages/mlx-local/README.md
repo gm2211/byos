@@ -65,5 +65,5 @@ Non-Node hosts (Tauri, Electron main, a Swift app) can drive the same helper ove
 ## Limits
 
 - Apple silicon macOS 14+ only. iOS apps should link `swift/` (`ByosMLX`) in-process, as Skim's iOS app does; there is no subprocess on iOS.
-- CI builds the helper on a macOS runner but cannot run a model there (no usable Metal GPU in hosted runners). Generation was verified by hand on an Apple silicon Mac; see the PR for the run.
+- CI builds the helper on a macOS runner but cannot run a model there (no usable Metal GPU in hosted runners). Generation is verified by hand with `scripts/smoke.mjs` (run from `packages/mlx-local`); on an M5 MacBook, Qwen3.5-2B-4bit streamed its first token in about 4.4 s from a cold start (model load included), and Apple Intelligence answered through the same helper.
 - Skim's article-prefix KV-cache reuse is not ported yet; every request prefills its whole prompt.

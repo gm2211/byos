@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Manual end-to-end check on an Apple silicon Mac, after `npm run build:bridge` and `npm run build`:
+// Manual end-to-end check on an Apple silicon Mac, from packages/mlx-local, after `npm run build:bridge` and `npm run build`:
 //   node scripts/smoke.mjs [publisher/model] [prompt]
 // Downloads the model if needed, streams one answer, prints timing. Uses the default models dir
 // unless BYOS_MLX_MODELS_DIR is set.
