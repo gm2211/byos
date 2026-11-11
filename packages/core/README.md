@@ -27,9 +27,16 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   `retryingLostConnection` asks again on a dropped connection; `providerErrorMessage` turns any failure
   into one sentence a person can act on. `decideBusy` is the same rule without I/O. Vectors:
   `conformance/provider-busy.json`.
+- Request shaping and lanes: `shapeClaudeBody` (temperature only for models that take it, low effort
+  and a 4096 max-tokens floor for models that think, the Claude Code block for subscriptions),
+  `claudeEmptyResponseMessage`, `shapeChatGPTBody` and `ChatGPTResponsesStream` (no sampling fields,
+  `store: false`, done only at `response.completed`, plan error codes as sentences), and
+  `RequestPacer` (background work waits for the person's requests). Vectors:
+  `conformance/request-shaping.json`.
 - `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
   (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`) and the same busy rules
-(`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the Grok,
+(`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), the same request
+  shaping (`ClaudeRequest.body`, `ChatGPTResponses.body`, `ChatGPTResponses.Stream`, `RequestPacer`), the Grok,
   Claude and ChatGPT plan sign-ins (`XAISignIn`, `ClaudeSignIn`, `ChatGPTSignIn` and their pure
   `XAIOAuth`, `ClaudeOAuth`, `ChatGPTOAuth` halves) and token stores (`KeychainTokenStore`,
   `MemoryTokenStore`), tested against the same

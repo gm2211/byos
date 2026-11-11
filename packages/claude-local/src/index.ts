@@ -1,5 +1,5 @@
 /** Node-only Claude Pro/Max subscription client: OAuth (loopback + paste), Keychain tokens, direct HTTPS. */
-import { buildClaudeTokenRequest, CLAUDE_CODE_SYSTEM_PREFIX, CLAUDE_OAUTH_BETA } from '@byos/core';
+import { buildClaudeTokenRequest, CLAUDE_CODE_SYSTEM_PREFIX, CLAUDE_OAUTH_BETA, CLAUDE_THINKING_MAX_TOKENS_FLOOR, claudeThinksByDefault } from '@byos/core';
 import { ClaudeError, checkSignal, httpError } from './errors.js';
 import { keychainStore, processLock, type CredentialStore } from './storage.js';
 import { TOKEN_URL, PASTE_REDIRECT_URI, loopbackAuthorize, newPkce, authorizeUrl, parsePastedCode, type Pkce } from './oauth.js';
@@ -13,7 +13,7 @@ export const ANTHROPIC_VERSION = '2023-06-01';
 export const BETA_HEADER = CLAUDE_OAUTH_BETA;
 /** Subscription tokens are only honored for requests that open with this system block. */
 export const SYSTEM_PREFIX = CLAUDE_CODE_SYSTEM_PREFIX;
-const THINKING_MAX_TOKENS_FLOOR = 4096;
+const THINKING_MAX_TOKENS_FLOOR = CLAUDE_THINKING_MAX_TOKENS_FLOOR;
 
 export type ClaudeAccount = { label: string };
 export type ClaudeStatus = { connected: boolean; account?: ClaudeAccount };
@@ -57,11 +57,7 @@ function parseState(raw: string | null): State {
   } catch { throw new ClaudeError('storage-unavailable'); }
 }
 /** 5-series models think by default and take `output_config.effort`; older ones think only when asked. */
-export function thinksByDefault(model: string): boolean {
-  const parts = model.toLowerCase().split('-'); if (parts.shift() !== 'claude') return false;
-  if (parts[0] && !/^\d+$/.test(parts[0])) parts.shift();
-  return /^\d+$/.test(parts[0] ?? '') && Number(parts[0]) >= 5;
-}
+export const thinksByDefault = claudeThinksByDefault;
 async function body(response: Response): Promise<Record<string, unknown>> {
   try { const v: unknown = await response.json(); if (!rec(v)) throw new Error(); return v; } catch { throw new ClaudeError('invalid-response'); }
 }

@@ -9,3 +9,6 @@ export * from './refresh-lock.js';
 export * from './xai-oauth.js';
 export * from './credential-mode.js';
 export * from './provider-busy.js';
+export * from './claude-request.js';
+export * from './chatgpt-responses.js';
+export * from './request-pacer.js';
