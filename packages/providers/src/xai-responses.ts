@@ -75,7 +75,7 @@
  * guessed at anywhere.
  */
 import type { ChatEvent, ChatRequest } from '@byos/core';
-import { ProviderRequestError, redactProviderSecrets } from './chat.js';
+import { ProviderRequestError, redactProviderSecrets, sendProviderRequest } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 import type { CloudEndpoint } from './endpoints.js';
 
@@ -334,7 +334,7 @@ async function recoverStoredResponse(endpoint: CloudEndpoint, id: string, signal
  * response is read back with GET /v1/responses/{id}.
  */
 export async function* streamXaiWebSearch(endpoint: CloudEndpoint, request: ChatRequest): AsyncGenerator<ChatEvent> {
-  const response = await fetch(xaiResponsesUrl(endpoint), {
+  const response = await sendProviderRequest(() => fetch(xaiResponsesUrl(endpoint), {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
@@ -347,7 +347,7 @@ export async function* streamXaiWebSearch(endpoint: CloudEndpoint, request: Chat
       include: ['no_inline_citations'],
       stream: true,
     }),
-  });
+  }), { provider: endpoint.busy, lane: request.lane, signal: request.signal, secrets: [endpoint.apiKey] });
   const seen = new Set<string>();
   if (!response.ok || !response.body || !(response.headers.get('content-type') || '').includes('text/event-stream')) {
     const payload = await response.json().catch(() => undefined);

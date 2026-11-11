@@ -51,6 +51,9 @@ export type ChatRequest = {
    * Each page the provider reports reading or citing arrives as a `source` event.
    */
   webSearch?: boolean;
+  /** `background` for work the person did not ask for (ratings, digests): no busy retries, and it
+   *  stops during a rate-limit cooldown. Defaults to `foreground`. */
+  lane?: 'foreground' | 'background';
 };
 
 /** A web page the provider's search returned or the answer cited. */

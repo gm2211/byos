@@ -1,6 +1,8 @@
 import {
   CLAUDE_CODE_SYSTEM_PREFIX,
   CLAUDE_OAUTH_BETA,
+  claudeEmptyResponseMessage,
+  shapeClaudeBody,
   createCredentialRefresher,
   type ApiKeySetupStep,
   type ByosProvider,
@@ -20,7 +22,7 @@ import {
   type ClaudeCredential,
   type ClaudeTokenFetch,
 } from './claude-sign-in.js';
-import { ProviderRequestError, safeProviderErrorText } from './chat.js';
+import { ProviderRequestError, safeProviderErrorText, sendProviderRequest } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 
 /**
@@ -151,29 +153,41 @@ function claudeWebSources(items: unknown[], seen: Set<string>): WebSource[] {
 export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = false): AsyncGenerator<ChatEvent> {
   requireKey(key, subscriptionsPaused);
   const userSystem = request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n\n');
-  // Subscription tokens are honored only when the system prompt opens with the Claude Code block.
-  const system = isClaudeSubscriptionCredential(key) ? [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }, ...(userSystem ? [{ type: 'text', text: userSystem }] : [])] : userSystem;
-  const response = await fetch(`${API}/messages`, {
+  const subscription = isClaudeSubscriptionCredential(key);
+  // @byos/core's Claude rules (ported from Skim): the Claude Code block opens a subscription's system
+  // prompt (without it Anthropic answers a bare 429), and a chosen effort turns on adaptive thinking
+  // with room to answer after it.
+  const body = shapeClaudeBody({
+    model: request.model,
+    messages: request.messages.filter(message => message.role !== 'system').map(({ role, content }) => ({ role, content })),
+    instructions: userSystem,
+    subscription,
+    maxTokens: 16_000,
+    effort: request.effort,
+    stream: true,
+    // Anthropic's server-side search tool: Anthropic runs the searches and bills the key or plan.
+    tools: request.webSearch ? [{ type: CLAUDE_WEB_SEARCH_TOOL, name: 'web_search', max_uses: 5 }] : undefined,
+  });
+  // Chat keeps the model's own sampling and, unless an effort was chosen, its own thinking default:
+  // 16k tokens leave room to answer, so the low-effort rule for small budgets isn't needed here.
+  delete body.temperature;
+  if (!request.effort) delete body.output_config;
+  if (body.system === '') delete body.system;
+  const response = await sendProviderRequest(() => fetch(`${API}/messages`, {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
     headers: headers(key, true),
-    body: JSON.stringify({
-      model: request.model,
-      max_tokens: 16_000,
-      stream: true,
-      ...(system.length ? { system } : {}),
-      messages: request.messages.filter(message => message.role !== 'system').map(({ role, content }) => ({ role, content })),
-      // Effort only when chosen and listed for the model; some models reject the field outright.
-      ...(request.effort ? { thinking: { type: 'adaptive' }, output_config: { effort: request.effort } } : {}),
-      // Anthropic's server-side search tool: Anthropic runs the searches and bills the key or plan.
-      ...(request.webSearch ? { tools: [{ type: CLAUDE_WEB_SEARCH_TOOL, name: 'web_search', max_uses: 5 }] } : {}),
-    }),
+    body: JSON.stringify(body),
+  }), {
+    provider: { name: 'Claude', credential: subscription ? 'subscription' : 'api-key', sharedLimitNote: subscription ? 'Claude.ai and Claude Code count toward the same limit.' : undefined },
+    lane: request.lane,
+    signal: request.signal,
+    secrets: [key],
   });
-  if (!response.ok || !response.body) {
-    const payload = await response.json().catch(() => undefined);
-    throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude answered ${response.status}.`, response.status);
-  }
+  if (!response.body) throw new ProviderRequestError('Claude sent an empty response. Try again.', response.status);
+  let wroteText = false;
+  let stopReason: string | undefined;
   let inputTokens: number | undefined;
   const seen = new Set<string>();
   const searches = new Map<unknown, string>();
@@ -184,7 +198,7 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
       let data: {
         type?: string;
         index?: unknown;
-        delta?: { type?: string; text?: unknown; thinking?: unknown; citation?: unknown; partial_json?: unknown };
+        delta?: { type?: string; text?: unknown; thinking?: unknown; citation?: unknown; partial_json?: unknown; stop_reason?: unknown };
         content_block?: { type?: unknown; content?: unknown; name?: unknown };
         message?: { usage?: { input_tokens?: unknown } };
         usage?: { output_tokens?: unknown };
@@ -210,10 +224,11 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
         if (Array.isArray(results)) for (const source of claudeWebSources(results, seen)) yield { type: 'source', source };
       }
       if (data.type === 'content_block_delta') {
-        if (data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') yield { type: 'text', text: data.delta.text };
+        if (data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') { if (data.delta.text) wroteText = true; yield { type: 'text', text: data.delta.text }; }
         if (data.delta?.type === 'thinking_delta' && typeof data.delta.thinking === 'string') yield { type: 'reasoning', text: data.delta.thinking };
         if (data.delta?.type === 'citations_delta') for (const source of claudeWebSources([data.delta.citation], seen)) yield { type: 'source', source };
       }
+      if (data.type === 'message_delta' && typeof data.delta?.stop_reason === 'string') stopReason = data.delta.stop_reason;
       if (data.type === 'message_delta' && typeof data.usage?.output_tokens === 'number') {
         yield { type: 'usage', inputTokens, outputTokens: data.usage.output_tokens };
       }
@@ -222,6 +237,8 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
     await reader.cancel().catch(() => undefined);
     try { reader.releaseLock(); } catch { /* A pending read releases it when settled. */ }
   }
+  // No text at all: say why when Claude did (out of room, declined) instead of showing nothing.
+  if (!wroteText) throw new ProviderRequestError(claudeEmptyResponseMessage(stopReason), 200);
   yield { type: 'done' };
 }
 

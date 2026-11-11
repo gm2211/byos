@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatRequest } from '@byos/core';
+import { ProviderBusyError, providerErrorMessage, sendRetryingWhenBusy, type BusyProvider, type ChatEvent, type ChatRequest } from '@byos/core';
 import type { CloudEndpoint } from './endpoints.js';
 import { iterateSseEvents } from './sse.js';
 import { sourcesFromAnnotations } from './xai-responses.js';
@@ -61,6 +61,33 @@ export function safeProviderErrorText(payload: unknown, credential: string): str
   return text ? redactProviderSecrets(text, [credential]) : undefined;
 }
 
+const GENERIC_PROVIDER: BusyProvider = { name: 'The provider', credential: 'api-key' };
+
+/**
+ * Sends a provider request with the shared busy rules (@byos/core provider-busy, ported from Skim):
+ * a 429/503/529 is asked again after retry-after or a 2 s then 6 s backoff (foreground only), a dropped
+ * connection is asked again on a fresh one, a rate limit that outlasts the retries starts a cooldown,
+ * and any other failure becomes one sentence a person can act on. Secrets never reach the message.
+ */
+export async function sendProviderRequest(
+  send: () => Promise<Response>,
+  options: { provider?: BusyProvider; lane?: 'foreground' | 'background'; signal?: AbortSignal; secrets: readonly (string | undefined)[] },
+): Promise<Response> {
+  const provider = options.provider ?? GENERIC_PROVIDER;
+  let response: Response;
+  try {
+    response = await sendRetryingWhenBusy(send, { provider, lane: options.lane, signal: options.signal });
+  } catch (error) {
+    if (error instanceof ProviderBusyError) throw new ProviderRequestError(redactProviderSecrets(error.message, options.secrets), 429);
+    throw error;
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new ProviderRequestError(redactProviderSecrets(providerErrorMessage(provider, response.status, body, response.headers), options.secrets), response.status);
+  }
+  return response;
+}
+
 type ChunkDelta = { content?: unknown; reasoning?: unknown; reasoning_content?: unknown; annotations?: unknown };
 type Chunk = {
   choices?: Array<{ delta?: ChunkDelta }>;
@@ -78,7 +105,7 @@ const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(
  * `url_citation` annotations become `source` events.
  */
 export async function* streamChatCompletions(endpoint: CloudEndpoint, request: ChatRequest): AsyncGenerator<ChatEvent> {
-  const response = await fetch(`${endpoint.baseUrl}/chat/completions`, {
+  const response = await sendProviderRequest(() => fetch(`${endpoint.baseUrl}/chat/completions`, {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
@@ -91,11 +118,8 @@ export async function* streamChatCompletions(endpoint: CloudEndpoint, request: C
       ...(request.effort ? { reasoning_effort: request.effort } : {}),
       ...(request.webSearch && endpoint.webSearch === 'openrouter-plugin' ? { plugins: [{ id: 'web' }] } : {}),
     }),
-  });
-  if (!response.ok || !response.body) {
-    const payload = await response.json().catch(() => undefined);
-    throw new ProviderRequestError(safeProviderErrorText(payload, endpoint.apiKey) ?? `The provider answered ${response.status}.`, response.status);
-  }
+  }), { provider: endpoint.busy, lane: request.lane, signal: request.signal, secrets: [endpoint.apiKey] });
+  if (!response.body) throw new ProviderRequestError(`${(endpoint.busy ?? GENERIC_PROVIDER).name} sent an empty response. Try again.`, response.status);
   const seen = new Set<string>();
   const reader = response.body.getReader();
   try {

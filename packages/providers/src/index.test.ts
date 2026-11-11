@@ -55,7 +55,19 @@ test('chat surfaces a provider refusal with its status and redacts an echoed cre
   fakeFetch(() => new Response(JSON.stringify({ code: 'x', error: 'Incorrect API key: bad-secret' }), { status: 401 }));
   await assert.rejects(async () => {
     for await (const _ of streamChatCompletions(endpointFor('xai', 'bad-secret'), { model: 'm', messages: [] })) { /* drain */ }
-  }, (error: Error & { status?: number }) => error.message === 'Incorrect API key: [redacted]' && error.status === 401);
+  }, (error: Error & { status?: number }) => error.message === 'Grok rejected the API key. Check it in Settings.' && error.status === 401);
+  fakeFetch(() => new Response(JSON.stringify({ code: 'x', error: 'Model not allowed for bad-secret' }), { status: 400 }));
+  await assert.rejects(async () => {
+    for await (const _ of streamChatCompletions(endpointFor('xai', 'bad-secret'), { model: 'm', messages: [] })) { /* drain */ }
+  }, (error: Error & { status?: number }) => error.message.startsWith('Grok couldn') && error.message.includes('[redacted]') && !error.message.includes('bad-secret') && error.status === 400);
+});
+
+test('Claude names the stop reason when the answer comes back empty', async () => {
+  const { claude } = await import('../dist/index.js');
+  fakeFetch(() => sse(['data: {"type":"message_delta","delta":{"stop_reason":"refusal"}}']));
+  await assert.rejects(async () => {
+    for await (const _ of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
+  }, (error: Error) => error.message === 'Claude declined to answer this. Try rephrasing the question.');
 });
 
 test('chat cancels provider stream when consumer stops early', async () => {
@@ -279,13 +291,13 @@ test('Claude web search sends Anthropic\'s search tool and yields each result an
     { type: 'done' },
   ]);
   assert.deepEqual(JSON.parse(String(calls[0].init?.body)).tools, [{ type: CLAUDE_WEB_SEARCH_TOOL, name: 'web_search', max_uses: 5 }]);
-  fakeFetch(() => sse([]));
+  fakeFetch(() => sse(['data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}']));
   for await (const _ of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
 });
 
 test('Claude without webSearch sends no tools', async () => {
   const { claude } = await import('../dist/index.js');
-  const calls = fakeFetch(() => sse([]));
+  const calls = fakeFetch(() => sse(['data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}']));
   for await (const _ of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'hi' }] })) { /* drain */ }
   assert.equal(JSON.parse(String(calls[0].init?.body)).tools, undefined);
 });
@@ -333,7 +345,11 @@ test('Grok web search reports a refusal with its status and redacts the key', as
   fakeFetch(() => new Response(JSON.stringify({ error: 'bad key xai-secret' }), { status: 401 }));
   await assert.rejects(async () => {
     for await (const _ of grok().stream('xai-secret', { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) { /* drain */ }
-  }, (error: Error & { status?: number }) => error.message === 'bad key [redacted]' && error.status === 401);
+  }, (error: Error & { status?: number }) => error.message === 'Grok rejected the API key. Check it in Settings.' && error.status === 401);
+  fakeFetch(() => new Response(JSON.stringify({ error: 'bad request xai-secret' }), { status: 400 }));
+  await assert.rejects(async () => {
+    for await (const _ of grok().stream('xai-secret', { model: 'm', messages: [{ role: 'user', content: 'x' }], webSearch: true })) { /* drain */ }
+  }, (error: Error & { status?: number }) => error.message.includes('bad request [redacted]') && error.status === 400);
 });
 
 function sseResponse(lines: string[]): Response {

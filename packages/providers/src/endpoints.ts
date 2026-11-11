@@ -1,3 +1,4 @@
+import type { BusyProvider, CredentialKind } from '@byos/core';
 /**
  * Where each browser-direct provider lives. All three answer a browser origin (CORS measured live
  * from Motive) and speak the OpenAI-compatible chat-completions shape, so the page calls them
@@ -18,6 +19,8 @@ export type CloudEndpoint = {
   /** Extra headers beyond Authorization/Content-Type. Only OpenRouter uses them (attribution). */
   headers?: Record<string, string>;
   webSearch: WebSearchMechanism;
+  /** Who answers, for busy retries and error sentences ("Grok is busy right now"). */
+  busy?: BusyProvider;
 };
 
 export type DirectProviderId = 'openrouter' | 'xai' | 'groq' | 'huggingface';
@@ -36,6 +39,8 @@ export type EndpointOptions = {
   appTitle?: string;
   /** Defaults to the page origin. */
   referer?: string;
+  /** Whether the credential is a plan sign-in or an API key; changes rate-limit wording. */
+  credential?: CredentialKind;
 };
 
 export function endpointFor(provider: DirectProviderId, credential: string, options: EndpointOptions = {}): CloudEndpoint {
@@ -47,15 +52,16 @@ export function endpointFor(provider: DirectProviderId, credential: string, opti
         apiKey: credential,
         headers: { 'HTTP-Referer': referer, ...(options.appTitle ? { 'X-OpenRouter-Title': options.appTitle } : {}) },
         webSearch: 'openrouter-plugin',
+        busy: { name: 'OpenRouter', credential: 'api-key' },
       };
     }
     case 'xai':
-      return { baseUrl: PROVIDER_BASE_URLS.xai, apiKey: credential, webSearch: 'xai-responses-web-search' };
+      return { baseUrl: PROVIDER_BASE_URLS.xai, apiKey: credential, webSearch: 'xai-responses-web-search', busy: { name: 'Grok', credential: options.credential ?? 'api-key' } };
     case 'groq':
-      return { baseUrl: PROVIDER_BASE_URLS.groq, apiKey: credential, webSearch: 'none' };
+      return { baseUrl: PROVIDER_BASE_URLS.groq, apiKey: credential, webSearch: 'none', busy: { name: 'Groq', credential: 'api-key' } };
     case 'huggingface':
       // No server-side search hook on Inference Providers' chat-completions route; callers must
       // not claim a search happened (see WebSearchMechanism's 'none' doc above).
-      return { baseUrl: PROVIDER_BASE_URLS.huggingface, apiKey: credential, webSearch: 'none' };
+      return { baseUrl: PROVIDER_BASE_URLS.huggingface, apiKey: credential, webSearch: 'none', busy: { name: 'Hugging Face', credential: 'api-key' } };
   }
 }
