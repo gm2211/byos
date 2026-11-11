@@ -96,6 +96,19 @@ vault.store('grok', grokCredentialFromDeviceTokens(status.tokens), 'session');
 
 Use your own `readCredential`/`saveCredential` instead of `grokVaultBinding` if the vault holds the record as one string. The Node equivalent (Keychain, device-code sign-in, direct `auth.x.ai`) is `@byos/grok-local`. Limits: whether xAI rotates refresh tokens is unconfirmed (refresh is single-flight either way); a 403 is never retried because some SuperGrok tiers answer 403 while signed in; a refresh answered 400 or 401 asks the user to reconnect, any other failure keeps the current access token until it expires. Live xAI behavior is unverified.
 
+**iOS and macOS (Swift).** `ByosCore` has the same flow natively, calling `auth.x.ai` directly with tokens in the Keychain:
+
+```swift
+import ByosCore
+
+let grok = XAISignIn(store: KeychainTokenStore(service: "com.example.app.xai"))
+let start = try await grok.begin()       // show start.userCode; open start.pageToOpen
+try await grok.complete(start)           // polls through pending, slow_down and dropped connections
+let token = try await grok.accessToken() // refreshed when under 5 minutes are left; nil when signed out
+```
+
+A refresh answered 400 or 401 clears the store and throws `XAIOAuthError.signInExpired`; any other failure keeps the current token while it still works. The parsers (`XAIOAuth.parseTokenResponse`, `parseDeviceStart`, `classifyPollError`, `classifyRefreshFailure`) run the same `conformance/xai-oauth.json` vectors as the TypeScript ones.
+
 ## Storage and session lifetime
 
 Use a stable, unique prefix for each application sharing an origin. Preserve existing prefixes during updates so saved accounts keep working. Credentials default to session-only storage; remember them only after an explicit user choice.
