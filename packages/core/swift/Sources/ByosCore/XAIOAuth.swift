@@ -198,7 +198,7 @@ public struct XAISignIn: Sendable {
     public init(
         store: TokenStore,
         send: @escaping HTTPSend = urlSessionSend,
-        sleep: @escaping @Sendable (TimeInterval) async throws -> Void = busySleep,
+        sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await busySleep($0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.store = store

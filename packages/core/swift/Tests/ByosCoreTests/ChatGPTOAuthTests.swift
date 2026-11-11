@@ -17,7 +17,8 @@ final class ChatGPTOAuthTests: XCTestCase {
 
     func testAFirstSignInRegistersAndAReturningOneReusesItsClient() {
         let first = URLComponents(url: Self.attempt().authorizeURL, resolvingAgainstBaseURL: false)!
-        let items = Dictionary(uniqueKeysWithValues: first.queryItems!.map { ($0.name, $0.value ?? "") })
+        // Form encoding writes spaces as "+", which URLComponents leaves as is.
+        let items = Dictionary(uniqueKeysWithValues: first.queryItems!.map { ($0.name, ($0.value ?? "").replacingOccurrences(of: "+", with: " ")) })
         XCTAssertEqual(items["client_id"], "dynamic_agent_client")
         XCTAssertEqual(items["agent_name_hint"], "Test App")
         XCTAssertEqual(items["redirect_uri"], "http://127.0.0.1:1455/auth/callback")
