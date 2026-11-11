@@ -181,6 +181,42 @@ try mode.require(.apiKey)                         // CredentialModeError before 
 
 Add it as a local SwiftPM package (a vendored copy lands at `<prefix>core/swift`). Both packages test against `packages/core/conformance/credential-mode.json`, so the web and Swift behavior cannot drift apart.
 
+## Busy providers, rate limits and error messages
+
+Send every cloud request through the busy rules, and show `providerErrorMessage` for any other failure. Raw error bodies never reach the UI.
+
+| Answer | What happens |
+| --- | --- |
+| 429 with `retry-after`, a usage window, or a reason | Asked again after `max(retry-after, 2s)`, then 6s. A wait over 20s, a closed plan window, or a third 429 fails with a plain message and starts a cooldown (the provider's wait, else 60s). |
+| 429 with only `"Error"` and no headers | Claude turning the request down: returned as is, no retry, no cooldown. |
+| 503 or 529 (overloaded) | Asked again the same way; then "X is overloaded right now". No cooldown. |
+| A dropped connection | Asked again on a fresh one after 0.5s, then 2s. |
+| Background lane | Never retried, and stops at once during any cooldown, so prefetch work cannot crowd out the reader. |
+
+```ts
+import { ProviderBusyError, providerErrorMessage, sendRetryingWhenBusy } from '@byos/core';
+
+const claude = { name: 'Claude', credential: 'subscription', sharedLimitNote: 'Claude.ai and Claude Code count toward the same limit.' } as const;
+try {
+  const response = await sendRetryingWhenBusy(() => fetch(url, init), { provider: claude, lane: 'foreground' });
+  if (!response.ok) throw new Error(providerErrorMessage(claude, response.status, await response.text(), response.headers));
+} catch (error) {
+  if (error instanceof ProviderBusyError) show(error.message); // "You've reached your Claude plan's usage limit. It resets at 3:00 PM. ..."
+}
+```
+
+```swift
+import ByosCore
+
+let claude = BusyProvider(name: "Claude", credential: .subscription)
+let (data, response) = try await sendRetryingWhenBusy(request, provider: claude, lane: .foreground) // throws ProviderBusyError
+if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+    throw MyError(ProviderErrors.message(claude, status: http.statusCode, body: data))
+}
+```
+
+Both packages test against `packages/core/conformance/provider-busy.json`.
+
 ## On-device models
 
 Keep execution location separate from subscription sign-in. Embedded models, MLX and Apple Intelligence need no account or token. Use the native catalog only for a user-owned application runtime with installed engine bindings:
