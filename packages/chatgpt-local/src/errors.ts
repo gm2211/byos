@@ -14,7 +14,8 @@ const messages: Record<ChatGptErrorCode, string> = {
 export class ChatGptError extends Error {
   readonly code: ChatGptErrorCode;
   readonly status?: number;
-  constructor(code: ChatGptErrorCode, status?: number) { super(messages[code]); this.name = 'ChatGptError'; this.code = code; this.status = status; }
+  /** `message` is only ever a sentence @byos/core wrote (busy, empty answer), never provider text. */
+  constructor(code: ChatGptErrorCode, status?: number, options: { message?: string; cause?: unknown } = {}) { super(options.message ?? messages[code], { cause: options.cause }); this.name = 'ChatGptError'; this.code = code; this.status = status; }
 }
 export function checkSignal(signal?: AbortSignal): void { if (signal?.aborted) throw new ChatGptError('canceled'); }
 export function httpError(status: number): ChatGptError {

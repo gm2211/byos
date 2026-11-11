@@ -15,7 +15,8 @@ export function authEndpoint(value: unknown): string {
 export async function request(fetcher: typeof fetch, url: string, init: RequestInit, signal?: AbortSignal, timeoutMs = 30_000): Promise<Response> {
   checkSignal(signal);
   try { return await fetcher(url, { ...init, redirect: 'error', credentials: 'omit', signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]) }); }
-  catch { checkSignal(signal); throw new ChatGptError('unavailable'); }
+  // The cause keeps a dropped socket recognizable, so the busy rules can ask again on a fresh connection.
+  catch (cause) { checkSignal(signal); throw new ChatGptError('unavailable', undefined, { cause }); }
 }
 export async function json(response: Response): Promise<Record<string, unknown>> {
   if (!response.body) throw new ChatGptError('invalid-response');

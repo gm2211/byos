@@ -86,7 +86,7 @@ test('model lists come from the provider', async () => {
   const calls = fakeFetch(({ url }) => url.endsWith('/models') && url.includes('x.ai')
     ? new Response(JSON.stringify({ data: [{ id: 'grok-b' }, { id: 'grok-a', name: 'Grok A' }] }))
     : new Response(JSON.stringify({ data: [{ id: 'good', name: 'GPT-5.6', supported_parameters: ['tools'] }, { id: 'no-tools' }] })));
-  assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-b', name: 'grok-b' }, { id: 'grok-a', name: 'Grok A' }]);
+  assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-b', name: 'Grok B' }, { id: 'grok-a', name: 'Grok A' }]);
   assert.deepEqual(await openrouter().listModels('k'), [{ id: 'good', name: 'GPT-5.6', recommended: true }]);
   assert.ok(calls.every(call => call.init?.redirect === 'error'));
 });

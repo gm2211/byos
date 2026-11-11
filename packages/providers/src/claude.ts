@@ -23,6 +23,7 @@ import {
   type ClaudeTokenFetch,
 } from './claude-sign-in.js';
 import { ProviderRequestError, safeProviderErrorText, sendProviderRequest } from './chat.js';
+import { friendlyModelName } from '@byos/core';
 import { iterateSseEvents } from './sse.js';
 
 /**
@@ -105,7 +106,7 @@ export function parseAnthropicModels(rows: unknown): CatalogModel[] {
       : [];
     models.push({
       id: raw.id,
-      name: typeof raw.display_name === 'string' && raw.display_name.trim() ? raw.display_name : raw.id,
+      name: typeof raw.display_name === 'string' && raw.display_name.trim() ? raw.display_name : friendlyModelName(raw.id),
       ...(efforts.length ? { reasoningEfforts: efforts.map(level => ({ effort: level })) } : {}),
     });
   }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { friendlyModelName } from '@byos/core';
 import { SearchableSelect } from './SearchableSelect.js';
 import { ByosIcon } from './icons.js';
 
@@ -56,6 +57,9 @@ export type ModelEffortPickerProps = {
   classNames?: { root?: string; field?: string; note?: string; retry?: string };
 };
 
+/** A model whose label is just its id ("grok-4-fast") reads as a name ("Grok 4 Fast"); real labels are kept. */
+const friendlyLabel = (option: PickerOption): PickerOption => option.label === option.value ? { ...option, label: friendlyModelName(option.value) } : option;
+
 export function ModelEffortPicker(props: ModelEffortPickerProps) {
   const s = { ...defaultModelEffortStrings, ...props.strings };
   s.modelAriaLabel = props.strings?.modelAriaLabel ?? props.strings?.model ?? defaultModelEffortStrings.modelAriaLabel;
@@ -68,7 +72,7 @@ export function ModelEffortPicker(props: ModelEffortPickerProps) {
   return <div className={c.root ?? 'byos byos-model-effort'}>
     <div className={field}>
       <span className="byos-field-icon" aria-hidden="true"><ByosIcon name="chip" size={16}/></span><span>{s.model} {props.modelNote && <small>{props.modelNote}</small>}</span>
-      {select({ ariaLabel: s.modelAriaLabel, value: props.model, options: props.models, onChange: props.onModelChange })}
+      {select({ ariaLabel: s.modelAriaLabel, value: props.model, options: props.models.map(friendlyLabel), onChange: props.onModelChange })}
     </div>
     {/* Effort is its own setting, always shown: a model without selectable levels still says so in
         the same place, rather than the field disappearing into a note under the model. */}

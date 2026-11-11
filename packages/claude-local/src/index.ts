@@ -1,5 +1,5 @@
 /** Node-only Claude Pro/Max subscription client: OAuth (loopback + paste), Keychain tokens, direct HTTPS. */
-import { buildClaudeTokenRequest, CLAUDE_CODE_SYSTEM_PREFIX, CLAUDE_OAUTH_BETA, CLAUDE_THINKING_MAX_TOKENS_FLOOR, claudeThinksByDefault } from '@byos/core';
+import { buildClaudeTokenRequest, friendlyModelName, claudeEmptyResponseMessage, ProviderBusyError, sendRetryingWhenBusy, type BusyProvider, type RequestLane, CLAUDE_CODE_SYSTEM_PREFIX, CLAUDE_OAUTH_BETA, CLAUDE_THINKING_MAX_TOKENS_FLOOR, claudeThinksByDefault } from '@byos/core';
 import { ClaudeError, checkSignal, httpError } from './errors.js';
 import { keychainStore, processLock, type CredentialStore } from './storage.js';
 import { TOKEN_URL, PASTE_REDIRECT_URI, loopbackAuthorize, newPkce, authorizeUrl, parsePastedCode, type Pkce } from './oauth.js';
@@ -38,7 +38,7 @@ export interface ClaudeClient {
   completePasteSignIn(pasted: string, signal?: AbortSignal): Promise<ClaudeStatus>;
   disconnect(): Promise<void>;
   listModels(signal?: AbortSignal): Promise<ClaudeModel[]>;
-  generate(request: { model: string; input: string; instructions?: string; maxTokens?: number; signal?: AbortSignal; onText?: (delta: string) => void }): Promise<{ text: string }>;
+  generate(request: { model: string; input: string; instructions?: string; maxTokens?: number; /** `lane: 'background'` fails fast while the provider cools down instead of waiting. */ lane?: 'foreground' | 'background'; signal?: AbortSignal; onText?: (delta: string) => void }): Promise<{ text: string }>;
 }
 type Tokens = { access: string; refresh?: string; expiresAt: number; label?: string };
 type State = { version: 1; tokens?: Tokens };
@@ -62,6 +62,8 @@ async function body(response: Response): Promise<Record<string, unknown>> {
   try { const v: unknown = await response.json(); if (!rec(v)) throw new Error(); return v; } catch { throw new ClaudeError('invalid-response'); }
 }
 
+const CLAUDE_BUSY: BusyProvider = { name: 'Claude', credential: 'subscription', sharedLimitNote: 'Claude.ai and Claude Code count toward the same limit.' };
+
 export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
   if (!str(options.appName, 100) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(options.namespace) || typeof options.openBrowser !== 'function') throw new TypeError('A valid appName, namespace and openBrowser are required.');
   const store = options.credentialStore ?? keychainStore(options.namespace);
@@ -74,7 +76,8 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
   async function call(url: string, init: RequestInit, signal?: AbortSignal, timeoutMs = 30_000): Promise<Response> {
     checkSignal(signal);
     try { return await fetcher(url, { ...init, redirect: 'error', credentials: 'omit', signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]) }); }
-    catch { checkSignal(signal); throw new ClaudeError('unavailable'); }
+    // The cause keeps a dropped socket recognizable, so the busy rules can ask again on a fresh connection.
+    catch (cause) { checkSignal(signal); throw new ClaudeError('unavailable', undefined, { cause }); }
   }
   const token = (payload: Record<string, unknown>, previous?: Tokens): Tokens => {
     if (!str(payload.access_token) || (payload.refresh_token !== undefined && !str(payload.refresh_token))) throw new ClaudeError('auth-failed');
@@ -116,6 +119,11 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
     await response.body?.cancel().catch(() => {});
     return send(await credential(signal, access));
   }
+  /** Asks again while Claude is busy or the connection drops; a lasting limit becomes `quota` (fixed text: core's busy sentence can quote the provider). */
+  async function busyRetried(send: () => Promise<Response>, lane: RequestLane | undefined, signal: AbortSignal | undefined): Promise<Response> {
+    try { return await sendRetryingWhenBusy(send, { provider: CLAUDE_BUSY, lane, signal }); }
+    catch (e) { if (e instanceof ProviderBusyError) throw new ClaudeError('quota', 429, { cause: e }); throw e; }
+  }
   async function guarded<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     try { return await run(); } catch (e) { checkSignal(signal); if (e instanceof ClaudeError) throw e; throw new ClaudeError('unavailable'); }
   }
@@ -144,7 +152,7 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
         if (!response.ok) { await response.body?.cancel().catch(() => {}); throw httpError(response.status); }
         const payload = await body(response);
         if (!Array.isArray(payload.data)) throw new ClaudeError('invalid-response');
-        for (const m of payload.data) if (rec(m) && str(m.id, 128) && !/\s/.test(m.id)) models.push({ id: m.id, name: str(m.display_name, 256) ? m.display_name : m.id });
+        for (const m of payload.data) if (rec(m) && str(m.id, 128) && !/\s/.test(m.id)) models.push({ id: m.id, name: str(m.display_name, 256) ? m.display_name : friendlyModelName(m.id) });
         if (payload.has_more !== true || !str(payload.last_id)) break;
         after = payload.last_id;
       }
@@ -162,16 +170,17 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
         messages: [{ role: 'user', content: input.input }],
         ...(think ? { output_config: { effort: 'low' } } : {}),
       });
-      const response = await authed(input.signal, access => call(`${API}/messages`, { method: 'POST', headers: headers(access, true), body: payload }, input.signal, 10 * 60_000));
+      const response = await busyRetried(() => authed(input.signal, access => call(`${API}/messages`, { method: 'POST', headers: headers(access, true), body: payload }, input.signal, 10 * 60_000)), input.lane, input.signal);
       if (!response.ok || !response.body) { await response.body?.cancel().catch(() => {}); throw httpError(response.status); }
       const reader = response.body.getReader(), decoder = new TextDecoder();
-      let buffer = '', text = '', ended = false;
+      let buffer = '', text = '', ended = false, stopReason: string | undefined;
       const line = (raw: string) => {
         const l = raw.trim(); if (!l.startsWith('data:')) return;
-        let data: { type?: string; delta?: { type?: string; text?: unknown } };
+        let data: { type?: string; delta?: { type?: string; text?: unknown; stop_reason?: unknown } };
         try { data = JSON.parse(l.slice(5)); } catch { return; }
         if (data.type === 'error') throw new ClaudeError('unavailable');
         if (data.type === 'message_stop') ended = true;
+        if (data.type === 'message_delta' && typeof data.delta?.stop_reason === 'string') stopReason = data.delta.stop_reason;
         if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta' && typeof data.delta.text === 'string') { text += data.delta.text; input.onText?.(data.delta.text); }
       };
       try {
@@ -184,7 +193,8 @@ export function createClaudeClient(options: ClaudeClientOptions): ClaudeClient {
           if (done) { line(buffer); break; }
         }
       } finally { await reader.cancel().catch(() => {}); }
-      if (!ended || !text.trim()) throw new ClaudeError('invalid-response');
+      if (!ended) throw new ClaudeError('invalid-response');
+      if (!text.trim()) throw new ClaudeError('invalid-response', undefined, { message: claudeEmptyResponseMessage(stopReason) });
       return { text };
     }, input.signal),
   };

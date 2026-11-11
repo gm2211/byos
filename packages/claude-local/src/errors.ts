@@ -14,7 +14,8 @@ const messages: Record<ClaudeErrorCode, string> = {
 export class ClaudeError extends Error {
   readonly code: ClaudeErrorCode;
   readonly status?: number;
-  constructor(code: ClaudeErrorCode, status?: number) { super(messages[code]); this.name = 'ClaudeError'; this.code = code; this.status = status; }
+  /** `message` is only ever a sentence @byos/core wrote (busy, empty answer), never provider text. */
+  constructor(code: ClaudeErrorCode, status?: number, options: { message?: string; cause?: unknown } = {}) { super(options.message ?? messages[code], { cause: options.cause }); this.name = 'ClaudeError'; this.code = code; this.status = status; }
 }
 export function checkSignal(signal?: AbortSignal): void { if (signal?.aborted) throw new ClaudeError('canceled'); }
 export function httpError(status: number): ClaudeError {
