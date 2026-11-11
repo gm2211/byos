@@ -139,7 +139,7 @@ test('Claude OAuth helpers: authorize URL, pasted code, token bodies and the str
   assert.equal(core.parseClaudePastedCode(' abc#STATE ', 'STATE'), 'abc');
   assert.equal(core.parseClaudePastedCode('abc', 'STATE'), 'abc');
   assert.equal(core.parseClaudePastedCode('abc#OTHER', 'STATE'), undefined);
-  assert.equal(core.parseClaudePastedCode('a b#STATE', 'STATE'), undefined);
+  assert.equal(core.parseClaudePastedCode('a b#STATE', 'STATE'), 'ab', 'stray spaces from copying are dropped');
   assert.equal(core.parseClaudePastedCode('', 'STATE'), undefined);
   assert.equal(core.parseClaudePastedCode('ab\nc#STA\r\nTE', 'STATE'), 'abc');
   assert.equal(core.parseClaudePastedCode('https://platform.claude.com/oauth/code/callback?code=abc&state=STATE', 'STATE'), 'abc');

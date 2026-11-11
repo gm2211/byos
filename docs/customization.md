@@ -72,6 +72,21 @@ app.use(claudeRelay.router); // before app.use(express.json())
 
 Limits to state in the host's UI and docs: sign-in is paste-code only (no popup or redirect); the host's server sees the code exchange and each refresh, and the tokens in those responses, in transit (it stores and logs nothing); the relay accepts only the Claude Code client's two grant shapes, 4 KiB bodies, same-origin browser calls, 20 requests a minute per account or address and 300 overall; and live acceptance of the paste-code redirect by Anthropic is unverified. `claude({ subscriptionsPaused: true })` still removes the sign-in method and refuses subscription credentials.
 
+
+**iOS and macOS (Swift).** `ByosCore` has the same paste-back sign-in natively, calling the token endpoint directly with tokens and the attempt in the Keychain:
+
+```swift
+import ByosCore
+
+let claude = ClaudeSignIn(
+    store: KeychainTokenStore(service: "com.example.app.claude"),
+    attempts: KeychainClaudeAttemptStore(service: "com.example.app.claude"))
+let attempt = claude.beginOrResume()        // open attempt.authorizeURL; survives suspension and relaunch
+try await claude.finish(pasted: text)       // CODE#STATE, a bare code or the callback URL
+let token = try await claude.accessToken()  // refreshed with under a minute left
+```
+
+A pasted email login code, a code from another attempt, or an empty paste each throw a `ClaudeOAuthError` with its own plain message. The same rules are `readClaudePastedCode` in TypeScript; both run `conformance/claude-oauth.json`.
 ## Grok subscription refresh
 
 Grok sign-in is a device-code flow whose access token lasts about an hour. To keep it alive, store the encoded credential (not just the access token) and pass `subscription` to `grok()`. The refresh grant goes browser to `auth.x.ai` inside browser TLS, through the ciphertext `xai-auth` destination of the codex relay; it never crosses a plaintext host route.

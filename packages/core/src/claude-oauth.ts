@@ -42,14 +42,20 @@ export function claudeAuthorizeUrl(params: ClaudeAuthorizeParams): string {
   return url.href;
 }
 
+export type ClaudePastedCode =
+  | { code: string }
+  /** `missing`: nothing usable. `state-mismatch`: a code from another attempt, whose verifier is gone.
+   * `email-login-code`: the short number Claude emails for logging in, which belongs in the browser. */
+  | { error: 'missing' | 'state-mismatch' | 'email-login-code' };
+
 /**
- * Accepts `CODE#STATE` (as the code page shows it), a bare code, or the whole callback URL
- * (`...?code=CODE&state=STATE`). Line breaks picked up while copying are dropped. Undefined when
- * unusable or when the state belongs to another attempt.
+ * Reads the authorization code out of what the person pasted: `CODE#STATE` (as the code page shows
+ * it), a bare code, or the whole callback URL (`...?code=CODE&state=STATE`). Spaces and line breaks
+ * picked up while copying are dropped. Says why when the paste is unusable.
  */
-export function parseClaudePastedCode(pasted: string, expectedState: string): string | undefined {
-  if (typeof pasted !== 'string') return undefined;
-  const text = pasted.replace(/[\r\n]+/g, '').trim();
+export function readClaudePastedCode(pasted: string, expectedState: string): ClaudePastedCode {
+  if (typeof pasted !== 'string') return { error: 'missing' };
+  const text = pasted.replace(/\s+/g, '');
   let code: string | undefined;
   let state: string | undefined;
   if (/^https?:\/\//i.test(text)) {
@@ -57,13 +63,35 @@ export function parseClaudePastedCode(pasted: string, expectedState: string): st
       const url = new URL(text);
       code = url.searchParams.get('code') ?? undefined;
       state = url.searchParams.get('state') ?? (url.hash.length > 1 ? url.hash.slice(1) : undefined);
-    } catch { return undefined; }
+    } catch { return { error: 'missing' }; }
   } else {
-    [code, state] = text.split('#');
+    const hash = text.indexOf('#');
+    code = hash < 0 ? text : text.slice(0, hash);
+    state = hash < 0 ? undefined : text.slice(hash + 1);
   }
-  state ??= expectedState;
-  if (!code || code.length > 4096 || /\s/.test(code) || state !== expectedState) return undefined;
-  return code;
+  if (!code || code.length > 4096) return { error: 'missing' };
+  if (state === undefined && /^\d{1,10}$/.test(code)) return { error: 'email-login-code' };
+  if (state && state !== expectedState) return { error: 'state-mismatch' };
+  return { code };
+}
+
+/** The code in `pasted`, or undefined when `readClaudePastedCode` finds it unusable. */
+export function parseClaudePastedCode(pasted: string, expectedState: string): string | undefined {
+  const read = readClaudePastedCode(pasted, expectedState);
+  return 'code' in read ? read.code : undefined;
+}
+
+/** The PKCE S256 challenge for `verifier` (base64url SHA-256, no padding). Uses Web Crypto. */
+export async function claudeCodeChallenge(verifier: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  let binary = '';
+  for (const byte of digest) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** 400 and 401 mean the refresh grant is dead; anything else (403, 429, 5xx, network) may pass. */
+export function classifyClaudeRefreshFailure(status: number): 'reconnect' | 'transient' {
+  return status === 400 || status === 401 ? 'reconnect' : 'transient';
 }
 
 export type ClaudeTokenRequest =

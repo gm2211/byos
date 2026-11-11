@@ -99,9 +99,9 @@ test('completeClaudeSignIn exchanges the pasted CODE#STATE and returns an encode
 test('completeClaudeSignIn rejects bad pastes, wrong state, expired attempts and upstream failures with fixed text', async () => {
   const { attempt } = await beginClaudeSignIn(0);
   const never = tokenFetch(() => { throw new Error('must not be called'); });
-  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, '', undefined, 1_000), (e: Error) => e instanceof ClaudeAuthError && /did not match/.test(e.message));
-  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, 'code#WRONG', undefined, 1_000), ClaudeAuthError);
-  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, 'a b', undefined, 1_000), ClaudeAuthError);
+  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, '', undefined, 1_000), (e: Error) => e instanceof ClaudeAuthError && /Paste the code/.test(e.message));
+  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, 'code#WRONG', undefined, 1_000), (e: Error) => e instanceof ClaudeAuthError && /different sign-in/.test(e.message));
+  await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, '123456', undefined, 1_000), (e: Error) => e instanceof ClaudeAuthError && /login code from Claude's email/.test(e.message));
   await assert.rejects(() => completeClaudeSignIn(never.fetch, attempt, 'code', undefined, 20 * 60_000 + 1), (e: Error) => /expired/.test(e.message));
   assert.equal(never.calls.length, 0);
 
