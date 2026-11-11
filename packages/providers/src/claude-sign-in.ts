@@ -16,8 +16,14 @@ import {
   claudeAuthorizeUrl,
   CLAUDE_PASTE_REDIRECT_URI,
   CLAUDE_TOKEN_URL,
-  parseClaudePastedCode,
+  readClaudePastedCode,
 } from '@byos/core';
+
+const PASTED_CODE_MESSAGES = {
+  missing: 'Paste the code Claude shows after Authorize.',
+  'state-mismatch': 'That code is from a different sign-in. Open Claude again, tap Authorize, and copy the new code.',
+  'email-login-code': "That's the login code from Claude's email. Enter it on Claude's page, then tap Authorize and paste the code Claude shows.",
+} as const;
 
 /** Always called with `CLAUDE_TOKEN_URL`; a host binding decides where the request really goes. */
 export type ClaudeTokenFetch = (input: string, init: RequestInit) => Promise<Response>;
@@ -246,8 +252,9 @@ export async function completeClaudeSignIn(
   if (!attempt.keepUntilCancelled && (now - attempt.createdAt > ATTEMPT_TTL_MS || now < attempt.createdAt)) {
     throw new ClaudeAuthError(400, 'This sign-in expired. Start again.');
   }
-  const code = parseClaudePastedCode(pasted, attempt.state);
-  if (!code) throw new ClaudeAuthError(400, 'That code did not match. Copy all of it again.');
+  const read = readClaudePastedCode(pasted, attempt.state);
+  if ('error' in read) throw new ClaudeAuthError(400, PASTED_CODE_MESSAGES[read.error]);
+  const { code } = read;
   let response: Response;
   try {
     response = await postGrant(tokenFetch, buildClaudeTokenRequest({

@@ -1,0 +1,234 @@
+{
+  "description": "Claude subscription OAuth vectors shared by @byos/core (TypeScript) and ByosCore (Swift). Synthetic values only.",
+  "constants": {
+    "clientId": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    "authorizeUrl": "https://claude.com/cai/oauth/authorize",
+    "tokenUrl": "https://platform.claude.com/v1/oauth/token",
+    "scope": "user:profile user:inference",
+    "pasteRedirectUri": "https://platform.claude.com/oauth/code/callback",
+    "oauthBeta": "oauth-2025-04-20,claude-code-20250219",
+    "claudeCodeSystemPrefix": "You are Claude Code, Anthropic's official CLI for Claude.",
+    "refreshWindowSeconds": 60,
+    "defaultLifetimeSeconds": 3600
+  },
+  "pkce": {
+    "verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+    "challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+  },
+  "authorize": {
+    "challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    "state": "state-123",
+    "redirectUri": "https://platform.claude.com/oauth/code/callback",
+    "url": "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=user%3Aprofile+user%3Ainference&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&state=state-123"
+  },
+  "expectedState": "state-123",
+  "pasted": [
+    {
+      "name": "code#state as the page shows it",
+      "input": "CODE123#state-123",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "code alone",
+      "input": "CODE123",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "code# with an empty state",
+      "input": "CODE123#",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "callback URL",
+      "input": "https://platform.claude.com/oauth/code/callback?code=CODE123&state=state-123",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "callback URL with the state in the fragment",
+      "input": "https://platform.claude.com/oauth/code/callback?code=CODE123#state-123",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "line breaks picked up while copying",
+      "input": "CO\nDE123#state\r\n-123",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "stray spaces picked up while copying",
+      "input": "  CODE 123 # state-123 ",
+      "expect": {
+        "code": "CODE123"
+      }
+    },
+    {
+      "name": "a state from another attempt",
+      "input": "CODE123#other-state",
+      "expect": {
+        "error": "state-mismatch"
+      }
+    },
+    {
+      "name": "callback URL from another attempt",
+      "input": "https://platform.claude.com/oauth/code/callback?code=CODE123&state=other",
+      "expect": {
+        "error": "state-mismatch"
+      }
+    },
+    {
+      "name": "nothing pasted",
+      "input": "   ",
+      "expect": {
+        "error": "missing"
+      }
+    },
+    {
+      "name": "a URL without a code",
+      "input": "https://platform.claude.com/oauth/code/callback?state=state-123",
+      "expect": {
+        "error": "missing"
+      }
+    },
+    {
+      "name": "the short login code Claude emails",
+      "input": "123456",
+      "expect": {
+        "error": "email-login-code"
+      }
+    },
+    {
+      "name": "digits with the state are a real code",
+      "input": "123456#state-123",
+      "expect": {
+        "code": "123456"
+      }
+    }
+  ],
+  "tokenRequests": [
+    {
+      "input": {
+        "kind": "authorization_code",
+        "code": "CODE123",
+        "state": "state-123",
+        "verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+        "redirectUri": "https://platform.claude.com/oauth/code/callback"
+      },
+      "body": {
+        "grant_type": "authorization_code",
+        "code": "CODE123",
+        "state": "state-123",
+        "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+        "redirect_uri": "https://platform.claude.com/oauth/code/callback",
+        "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+      }
+    },
+    {
+      "input": {
+        "kind": "refresh_token",
+        "refreshToken": "synthetic-refresh"
+      },
+      "body": {
+        "grant_type": "refresh_token",
+        "refresh_token": "synthetic-refresh",
+        "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+      }
+    }
+  ],
+  "now": 1700000000,
+  "tokenResponses": [
+    {
+      "name": "full",
+      "previousRefreshToken": "prev",
+      "payload": {
+        "access_token": "a1",
+        "refresh_token": "r1",
+        "expires_in": 28800,
+        "token_type": "Bearer",
+        "account": {
+          "email_address": "person@example.com"
+        }
+      },
+      "expect": {
+        "accessToken": "a1",
+        "refreshToken": "r1",
+        "expiresAt": 1700028800,
+        "accountEmail": "person@example.com"
+      }
+    },
+    {
+      "name": "missing refresh keeps the previous one",
+      "previousRefreshToken": "prev",
+      "payload": {
+        "access_token": "a1",
+        "expires_in": 60
+      },
+      "expect": {
+        "accessToken": "a1",
+        "refreshToken": "prev",
+        "expiresAt": 1700000060
+      }
+    },
+    {
+      "name": "missing expires_in assumes an hour",
+      "payload": {
+        "access_token": "a1"
+      },
+      "expect": {
+        "accessToken": "a1",
+        "expiresAt": 1700003600
+      }
+    },
+    {
+      "name": "empty access token",
+      "payload": {
+        "access_token": ""
+      },
+      "expect": null
+    },
+    {
+      "name": "not an object",
+      "payload": "nope",
+      "expect": null
+    },
+    {
+      "name": "control characters in the token",
+      "payload": {
+        "access_token": "a\u00001"
+      },
+      "expect": null
+    }
+  ],
+  "refreshFailures": [
+    {
+      "status": 400,
+      "expect": "reconnect"
+    },
+    {
+      "status": 401,
+      "expect": "reconnect"
+    },
+    {
+      "status": 403,
+      "expect": "transient"
+    },
+    {
+      "status": 429,
+      "expect": "transient"
+    },
+    {
+      "status": 500,
+      "expect": "transient"
+    }
+  ]
+}

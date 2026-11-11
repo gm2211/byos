@@ -9,12 +9,15 @@ public struct OAuthTokens: Codable, Equatable, Sendable {
     public var refreshToken: String?
     public var idToken: String?
     public var expiresAt: Date
+    /// The account's email, when the provider said.
+    public var accountEmail: String?
 
-    public init(accessToken: String, refreshToken: String? = nil, idToken: String? = nil, expiresAt: Date) {
+    public init(accessToken: String, refreshToken: String? = nil, idToken: String? = nil, expiresAt: Date, accountEmail: String? = nil) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.idToken = idToken
         self.expiresAt = expiresAt
+        self.accountEmail = accountEmail
     }
 
     /// True when the access token has less than `window` left.
@@ -44,29 +47,27 @@ public final class MemoryTokenStore: TokenStore, @unchecked Sendable {
 }
 
 #if canImport(Security)
-/// Tokens in the Keychain as one generic-password item (`service`, account `tokens`), readable after
-/// the first unlock so background refreshes work, and never synced to iCloud.
-public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
-    public let service: String
-    private let account = "tokens"
-
-    public init(service: String) { self.service = service }
+/// One Codable value in the Keychain as a generic-password item, readable after the first unlock
+/// so background refreshes work, and never synced to iCloud or another device.
+struct KeychainItem<Value: Codable> {
+    let service: String
+    let account: String
 
     private var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
     }
 
-    public func load() -> OAuthTokens? {
+    func load() -> Value? {
         var lookup = query
         lookup[kSecReturnData as String] = true
         lookup[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
         guard SecItemCopyMatching(lookup as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(OAuthTokens.self, from: data)
+        return try? JSONDecoder().decode(Value.self, from: data)
     }
 
-    public func save(_ tokens: OAuthTokens) {
-        guard let data = try? JSONEncoder().encode(tokens) else { return }
+    func save(_ value: Value) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
@@ -76,9 +77,24 @@ public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
         }
     }
 
-    public func clear() {
+    func clear() {
         SecItemDelete(query as CFDictionary)
     }
+}
+
+/// Tokens in the Keychain (`service`, account `tokens`).
+public final class KeychainTokenStore: TokenStore, @unchecked Sendable {
+    public let service: String
+    private let item: KeychainItem<OAuthTokens>
+
+    public init(service: String) {
+        self.service = service
+        item = KeychainItem(service: service, account: "tokens")
+    }
+
+    public func load() -> OAuthTokens? { item.load() }
+    public func save(_ tokens: OAuthTokens) { item.save(tokens) }
+    public func clear() { item.clear() }
 }
 #endif
 
