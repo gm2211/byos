@@ -21,8 +21,15 @@ sites can reuse them. Design: https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   `providersForCredentialMode`, `signInMethodsFor`, `allowsSignInMethod`, `credentialKind`,
   `parseCredentialMode` and the request guard `assertCredentialAllowed` (`CredentialModeError`). Pass
   the same mode to `AiConnectPanel` (`credentialMode`). Vectors: `conformance/credential-mode.json`.
+- Busy providers and error messages: `sendRetryingWhenBusy` asks a 429/503/529 again after
+  `retry-after` or a 2s then 6s backoff (foreground only), honours Claude's plan-window headers, and
+  starts a per-provider cooldown (`BusyCooldowns`) when a rate limit outlasts the retries;
+  `retryingLostConnection` asks again on a dropped connection; `providerErrorMessage` turns any failure
+  into one sentence a person can act on. `decideBusy` is the same rule without I/O. Vectors:
+  `conformance/provider-busy.json`.
 - `swift/`: the `ByosCore` Swift package for iOS and macOS, with the same credential-mode API
-  (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`), tested against the same
+  (`CredentialMode`, `SignInMethod`, `ProviderDescriptor`, `require(_:)`) and the same busy rules
+(`sendRetryingWhenBusy`, `BusyCooldowns`, `ProviderErrors.message`, `decideBusy`), tested against the same
   vectors (`swift test --package-path packages/core/swift`).
 
 ## Token rule
