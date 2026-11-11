@@ -1,0 +1,481 @@
+{
+  "_comment": "Link health and offline fallback rules ported from Skim. Read by src/link-health.test.ts and swift/Tests/ByosCoreTests/LinkHealthTests.swift.",
+  "policy": {
+    "probeTimeoutMs": 2500,
+    "degradedRttMs": 800,
+    "reprobeMs": 3000,
+    "confirmReprobeMs": 1000,
+    "strikes": 2,
+    "chatHedge": {
+      "min": 5000,
+      "max": 30000,
+      "initial": 12000
+    },
+    "summaryHedge": {
+      "min": 8000,
+      "max": 45000,
+      "initial": 20000
+    }
+  },
+  "verdicts": [
+    {
+      "rttMs": null,
+      "slowRadio": false,
+      "expect": "down"
+    },
+    {
+      "rttMs": 40,
+      "slowRadio": false,
+      "expect": "healthy"
+    },
+    {
+      "rttMs": 800,
+      "slowRadio": false,
+      "expect": "healthy"
+    },
+    {
+      "rttMs": 801,
+      "slowRadio": false,
+      "expect": "degraded"
+    },
+    {
+      "rttMs": 40,
+      "slowRadio": true,
+      "expect": "degraded"
+    },
+    {
+      "rttMs": 2600,
+      "slowRadio": false,
+      "expect": "down"
+    }
+  ],
+  "badProbes": [
+    {
+      "rttMs": null,
+      "slowRadio": false,
+      "steadyPath": true,
+      "expect": true
+    },
+    {
+      "rttMs": 1200,
+      "slowRadio": false,
+      "steadyPath": true,
+      "expect": false
+    },
+    {
+      "rttMs": 1200,
+      "slowRadio": false,
+      "steadyPath": false,
+      "expect": true
+    },
+    {
+      "rttMs": 40,
+      "slowRadio": true,
+      "steadyPath": false,
+      "expect": true
+    },
+    {
+      "rttMs": 40,
+      "slowRadio": false,
+      "steadyPath": false,
+      "expect": false
+    }
+  ],
+  "hedges": [
+    {
+      "name": "fewer than five answers uses the initial deadline",
+      "recentMs": [
+        1000,
+        2000,
+        3000,
+        4000
+      ],
+      "bounds": "chat",
+      "expect": 12000
+    },
+    {
+      "name": "fast answers floor at the minimum",
+      "recentMs": [
+        500,
+        600,
+        700,
+        800,
+        900
+      ],
+      "bounds": "chat",
+      "expect": 5000
+    },
+    {
+      "name": "1.25 times the 90th percentile",
+      "recentMs": [
+        8000,
+        9000,
+        10000,
+        11000,
+        12000,
+        13000,
+        14000,
+        15000,
+        16000,
+        17000
+      ],
+      "bounds": "chat",
+      "expect": 20000
+    },
+    {
+      "name": "slow models cap at the maximum",
+      "recentMs": [
+        40000,
+        41000,
+        42000,
+        43000,
+        44000
+      ],
+      "bounds": "chat",
+      "expect": 30000
+    },
+    {
+      "name": "summaries get more room",
+      "recentMs": [
+        30000,
+        31000,
+        32000,
+        33000,
+        34000
+      ],
+      "bounds": "summary",
+      "expect": 42500
+    },
+    {
+      "name": "order does not matter",
+      "recentMs": [
+        17000,
+        8000,
+        16000,
+        9000,
+        15000,
+        10000,
+        14000,
+        11000,
+        13000,
+        12000
+      ],
+      "bounds": "chat",
+      "expect": 20000
+    }
+  ],
+  "watches": [
+    {
+      "name": "two failures in a row",
+      "probesMs": [
+        null,
+        null
+      ],
+      "steadyPath": false,
+      "expect": true,
+      "probes": 2,
+      "waitsMs": [
+        1000
+      ]
+    },
+    {
+      "name": "one failure is noise",
+      "probesMs": [
+        null,
+        40,
+        null,
+        40
+      ],
+      "steadyPath": false,
+      "expect": false,
+      "probes": 4,
+      "waitsMs": [
+        1000,
+        3000,
+        1000,
+        3000
+      ]
+    },
+    {
+      "name": "slow handshakes count off a steady path",
+      "probesMs": [
+        40,
+        1200,
+        1500
+      ],
+      "steadyPath": false,
+      "expect": true,
+      "probes": 3,
+      "waitsMs": [
+        3000,
+        1000
+      ]
+    },
+    {
+      "name": "slow handshakes do not count on Wi-Fi",
+      "probesMs": [
+        1200,
+        1500,
+        1800
+      ],
+      "steadyPath": true,
+      "expect": false,
+      "probes": 3,
+      "waitsMs": [
+        3000,
+        3000,
+        3000
+      ]
+    }
+  ],
+  "localHosts": [
+    {
+      "host": "localhost",
+      "expect": true
+    },
+    {
+      "host": "mac-mini.local",
+      "expect": true
+    },
+    {
+      "host": "127.0.0.1",
+      "expect": true
+    },
+    {
+      "host": "::1",
+      "expect": true
+    },
+    {
+      "host": "10.0.0.5",
+      "expect": true
+    },
+    {
+      "host": "192.168.1.20",
+      "expect": true
+    },
+    {
+      "host": "172.16.0.1",
+      "expect": true
+    },
+    {
+      "host": "172.31.255.1",
+      "expect": true
+    },
+    {
+      "host": "172.32.0.1",
+      "expect": false
+    },
+    {
+      "host": "169.254.10.10",
+      "expect": true
+    },
+    {
+      "host": "api.anthropic.com",
+      "expect": false
+    },
+    {
+      "host": "8.8.8.8",
+      "expect": false
+    },
+    {
+      "host": "LOCALHOST",
+      "expect": true
+    },
+    {
+      "host": "10.0.0",
+      "expect": false
+    }
+  ],
+  "providerFailures": [
+    {
+      "provider": "Claude",
+      "timedOut": true,
+      "reason": null,
+      "expect": "Claude took too long to answer. Your connection is fine; try again."
+    },
+    {
+      "provider": "ChatGPT",
+      "timedOut": false,
+      "reason": "The network connection was lost.",
+      "expect": "ChatGPT didn't answer (The network connection was lost.). Your connection is fine; try again."
+    }
+  ],
+  "fallbacks": [
+    {
+      "name": "online success stays online",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [],
+      "linkHealthy": true,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "result": "cloud",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "known offline goes straight to the device",
+      "route": "auto",
+      "offline": true,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "device"
+        ],
+        "result": "device",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "a dead link falls back to the device",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [
+        "cloud:connectivity"
+      ],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "cloud",
+          "device"
+        ],
+        "result": "device",
+        "unreachable": true
+      }
+    },
+    {
+      "name": "a timeout on a healthy link is the provider's failure",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [
+        "cloud:connectivity"
+      ],
+      "linkHealthy": true,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "error": "provider",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "no connection skips the probe",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [
+        "cloud:no-connection"
+      ],
+      "linkHealthy": true,
+      "expect": {
+        "ranOn": [
+          "cloud",
+          "device"
+        ],
+        "result": "device",
+        "unreachable": true
+      }
+    },
+    {
+      "name": "other errors are thrown as they are",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [
+        "cloud:other"
+      ],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "error": "original",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "online route never falls back",
+      "route": "online",
+      "offline": true,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [
+        "cloud:connectivity"
+      ],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "error": "original",
+        "unreachable": true
+      }
+    },
+    {
+      "name": "local route always uses the device",
+      "route": "local",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": true,
+      "fails": [],
+      "linkHealthy": true,
+      "expect": {
+        "ranOn": [
+          "device"
+        ],
+        "result": "device",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "no device model keeps the cloud error",
+      "route": "auto",
+      "offline": false,
+      "needsConnection": true,
+      "canReroute": false,
+      "fails": [
+        "cloud:connectivity"
+      ],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "error": "original",
+        "unreachable": false
+      }
+    },
+    {
+      "name": "a local-network provider never falls back",
+      "route": "auto",
+      "offline": true,
+      "needsConnection": false,
+      "canReroute": true,
+      "fails": [
+        "cloud:connectivity"
+      ],
+      "linkHealthy": false,
+      "expect": {
+        "ranOn": [
+          "cloud"
+        ],
+        "error": "original",
+        "unreachable": false
+      }
+    }
+  ]
+}
