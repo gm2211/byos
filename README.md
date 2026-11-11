@@ -19,7 +19,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/claude-local` | Claude Pro/Max subscription sign-in for local Node apps; Keychain, loopback OAuth with a paste-code fallback, direct HTTPS |
 | `@byos/grok-local` | Grok (xAI SuperGrok) subscription sign-in for local Node apps; device-code OAuth, Keychain, direct refresh against `auth.x.ai` |
 | `@byos/mlx-local` | On-device inference for local Node apps on Apple silicon Macs: MLX models and Apple Intelligence through a bundled Swift helper (Skim's engine) |
-| `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract |
+| `@byos/core` | Framework-free credential vault, effort store, model cache, provider contract, credential mode (subscriptions, API keys, or both); `ByosCore` Swift package for iOS/macOS in `packages/core/swift` |
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
 | `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in and Grok subscription refresh) plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |

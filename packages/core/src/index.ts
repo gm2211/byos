@@ -7,3 +7,4 @@ export * from './codex-client.js';
 export * from './claude-oauth.js';
 export * from './refresh-lock.js';
 export * from './xai-oauth.js';
+export * from './credential-mode.js';

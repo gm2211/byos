@@ -267,3 +267,38 @@ test('xAI poll errors and refresh failures classify per the conformance vectors'
     assert.equal(core.classifyXaiRefreshFailure(vector.status), vector.expected, String(vector.status));
   }
 });
+
+const modeVectors = JSON.parse(readFileSync(new URL('../conformance/credential-mode.json', import.meta.url), 'utf8'));
+const methodOf = (kind: string) => (kind === 'api-key' ? { kind, hint: 'k' } : kind === 'paste-token' ? { kind, hint: 't' } : { kind, handshakeViaSite: false });
+
+test('credential modes, defaults and parsing match the conformance vectors', () => {
+  assert.deepEqual(core.CREDENTIAL_MODES, modeVectors.modes);
+  assert.equal(core.DEFAULT_CREDENTIAL_MODE, modeVectors.default);
+  for (const { input, expect } of modeVectors.parse) assert.equal(core.parseCredentialMode(input), expect, String(input));
+  assert.equal(core.parseCredentialMode('bogus', 'subscription'), 'subscription');
+  for (const [kind, expected] of Object.entries(modeVectors.methodKinds)) assert.equal(core.credentialKind({ kind } as never), expected, kind);
+  for (const mode of modeVectors.modes) {
+    for (const kind of ['subscription', 'api-key']) {
+      assert.equal(core.allowsCredentialKind(mode, kind as never), modeVectors.allows[mode].includes(kind), `${mode}/${kind}`);
+    }
+  }
+});
+
+test('providers filter per credential mode as the conformance vectors say', () => {
+  const providers = modeVectors.providers.map((p: { id: string; signIn: string[] }) => ({ id: p.id, signIn: p.signIn.map(methodOf) }));
+  const before = JSON.stringify(providers);
+  for (const mode of modeVectors.modes) {
+    const got = core.providersForCredentialMode(providers, mode).map((p: { id: string; signIn: { kind: string }[] }) => ({ id: p.id, signIn: p.signIn.map(m => m.kind) }));
+    assert.deepEqual(got, modeVectors.expect[mode], mode);
+  }
+  assert.equal(JSON.stringify(providers), before, 'inputs are not changed');
+  assert.equal(core.providersForCredentialMode(providers, 'subscription-and-api-key')[0], providers[0], 'unfiltered providers are returned as-is');
+});
+
+test('assertCredentialAllowed refuses a key in subscription mode with fixed text', () => {
+  assert.doesNotThrow(() => core.assertCredentialAllowed('subscription-and-api-key', 'api-key'));
+  assert.doesNotThrow(() => core.assertCredentialAllowed('subscription', 'subscription'));
+  assert.throws(() => core.assertCredentialAllowed('subscription', 'api-key'), (error: unknown) =>
+    error instanceof core.CredentialModeError && error.kind === 'api-key' && error.message === 'API keys are turned off in this app.');
+  assert.throws(() => core.assertCredentialAllowed('api-key', 'subscription'), /Subscription sign-in is turned off/);
+});

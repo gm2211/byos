@@ -15,7 +15,8 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   combobox by default; `renderSelect` preserves an application-owned control when needed.
 - `AiPill`: status pill plus quick-settings popover (bottom sheet on phones).
 - `AiQuickSettingsPanel`: reusable provider heading, settings action, connection notice, and settings body for `AiPill` or standalone use.
-- `AiConnectPanel`: the complete connect surface: provider picker, then Account / Model / Preferences for the picked service, with every sign-in method the provider declares inline in Account.
+- `AiConnectPanel`: the complete connect surface: provider picker, then Account / Model / Preferences for the picked service, with every sign-in method the provider declares inline in Account. `credentialMode` (`subscription-and-api-key` default, `subscription`, `api-key`) filters methods and services; `servicesForCredentialMode` does the same for a host's own list.
+- `CredentialModePicker`: an optional radio group for choosing that mode on an admin, developer or settings screen.
 - `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
 - `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
 - `SignInWithChatGPT`: localized identity-only website sign-in presentation with approved black/white OpenAI button formats and availability/status slots. The host supplies the start route and its disclosure.
