@@ -41,7 +41,8 @@ public enum ClaudeOAuth {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    static func randomURLSafe(byteCount: Int = 32) -> String {
+    /// A random base64url string from `byteCount` secure random bytes (PKCE verifiers, states, nonces).
+    public static func randomURLSafe(byteCount: Int = 32) -> String {
         var generator = SystemRandomNumberGenerator()
         return base64URL(Data((0..<byteCount).map { _ in UInt8.random(in: .min ... .max, using: &generator) }))
     }
