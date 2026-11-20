@@ -21,3 +21,24 @@ The provider refreshes the credential when it is near expiry or on a 401 (once),
 so tabs never rotate the refresh grant twice, and saves the new one through `saveCredential`.
 Set `namespace` to a stable site-specific id when multiple apps share an origin; it scopes the Web
 Lock name and avoids unrelated apps contending during refresh. Omit it for the shared default lock.
+
+## Official ChatGPT plan sign-in, no relay (`chatgptPlan`)
+
+`plan.ts` is OpenAI's official [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)
+plan flow for a page: the flow `@byos/chatgpt-local` and ByosCore Swift use. It does not use the
+TLS fetch, the relay or the Codex client ID. OpenAI redirects only to
+`http://127.0.0.1:1455/auth/callback`, so the person pastes that address back:
+
+```ts
+const registration = createChatGptPlanRegistration({ prefix: 'my-site-chatgpt:' });
+const { url, attempt } = await beginChatGptPlanSignIn({ appName: 'My Site', hostId: registration.hostId(), clientId: registration.clientId() });
+const done = await completeChatGptPlanSignIn(attempt, pastedAddress);   // straight to auth.openai.com
+registration.saveClientId(done.clientId);
+vault.store('chatgpt', done.credential, 'browser');
+
+const provider = chatgptPlan({ appName: 'My Site', namespace: 'my-site', readCredential, saveCredential, onRegistrationReset: () => registration.forgetClientId() });
+```
+
+Models come from `https://api.openai.com/v1/models` and chat from `/v1/responses` with
+`store: false`, `stream: true` and no sampling fields. Plain chat only: no `webSearch`. Errors
+carry fixed text. Tests use synthetic tokens; live acceptance by OpenAI is not shown by them.
