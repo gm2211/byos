@@ -450,7 +450,7 @@ registration.saveClientId(done.clientId);
 vault.store('chatgpt', done.credential, 'browser');
 ```
 
-`completeChatGptPlanSignIn` throws `ChatGptPlanAuthError` with fixed text and a `code`: keep the attempt on `pasted` so the person can paste again, and call `registration.forgetClientId()` on `registration-reset`. Show the step with `PasteCodeSignIn`, with strings that say to copy the address of the page that did not load. The adapter is plain chat: it sends `store: false`, `stream: true` and no sampling fields, and does not offer `webSearch`. A credential from the device-code `codex()` adapter is not accepted; the person signs in again. Tests are synthetic and prove request shapes and validation only.
+`completeChatGptPlanSignIn` throws `ChatGptPlanAuthError` with fixed text and a `code`: keep the attempt on `pasted` so the person can paste again, and call `registration.forgetClientId()` on `registration-reset`. Show the step with `PasteCodeSignIn`, with strings that say to copy the address of the page that did not load. Pass `guide`, `submitOnPaste` and `onPasteFromClipboard` so the step is one paste. The adapter sends `store: false`, `stream: true` and no sampling fields; `webSearch` adds OpenAI's `web_search` tool, the one hosted tool plan usage supports. A credential from the device-code `codex()` adapter is not accepted; the person signs in again. Tests are synthetic and prove request shapes and validation only.
 
 ## Update all consumers
 

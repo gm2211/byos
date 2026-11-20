@@ -40,5 +40,5 @@ const provider = chatgptPlan({ appName: 'My Site', namespace: 'my-site', readCre
 ```
 
 Models come from `https://api.openai.com/v1/models` and chat from `/v1/responses` with
-`store: false`, `stream: true` and no sampling fields. Plain chat only: no `webSearch`. Errors
+`store: false`, `stream: true` and no sampling fields; `webSearch` adds OpenAI's `web_search` tool. Errors
 carry fixed text. Tests use synthetic tokens; live acceptance by OpenAI is not shown by them.

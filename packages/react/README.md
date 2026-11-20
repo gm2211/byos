@@ -3,7 +3,7 @@
 React UI for the bring-your-own-subscription kit. Design:
 https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 
-- `PasteCodeSignIn`: paste-code subscription sign-in (Claude): a start button, then a labelled password input for
+- `PasteCodeSignIn`: paste-code subscription sign-in (Claude, ChatGPT plan; optional `guide`, `submitOnPaste` and `onPasteFromClipboard` make it one paste): a start button, then a labelled password input for
   the code the provider shows, with exchanging and error states. Stateless: the host owns `status`
   (`idle | awaiting-code | exchanging | error`), the `code` draft (`code` / `onCodeChange`), and `onStart` /
   `onSubmit(code)` / `onCancel`; optional `remember`, `disclosure`, `privacyDetails`, `available` and `strings`.
