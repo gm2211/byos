@@ -469,6 +469,19 @@ test('PasteCodeSignIn awaiting-code has a labelled password input, a hint, and a
   assert.match(html, />Cancel sign-in<\/button>/);
 });
 
+test('PasteCodeSignIn shows the guide before and during the paste step, and a one-click paste button while empty', () => {
+  const guide = createElement('ol', null, createElement('li', null, 'Approve at the provider.'));
+  assert.match(paste({ guide }), /class="byos-signin-guide"><ol><li>Approve at the provider\.<\/li>/);
+  const waiting = paste({ status: 'awaiting-code', guide, onPasteFromClipboard: connectNoop });
+  assert.match(waiting, /class="byos-signin-guide"/);
+  assert.match(waiting, /<button class="byos-signin-primary" type="button">Paste and connect<\/button>/);
+  assert.doesNotMatch(waiting, /type="submit"/);
+  const filled = paste({ status: 'awaiting-code', code: 'abc', onPasteFromClipboard: connectNoop });
+  assert.match(filled, /type="submit"/);
+  assert.doesNotMatch(filled, /Paste and connect/);
+  assert.doesNotMatch(paste({ status: 'awaiting-code' }), /Paste and connect|byos-signin-guide/);
+});
+
 test('PasteCodeSignIn disables submit while empty or exchanging and offers a reopen after an error', () => {
   assert.match(paste({ status: 'awaiting-code', code: '  ' }), /<button[^>]*type="submit"[^>]*disabled=""/);
   const exchanging = paste({ status: 'exchanging', code: 'abc' });

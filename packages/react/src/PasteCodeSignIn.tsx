@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ClipboardEvent, type FormEvent, type ReactNode } from 'react';
 import { ByosIcon } from './icons.js';
 
 /**
@@ -27,6 +27,8 @@ export type PasteCodeSignInStrings = {
   unavailableButton: string;
   remember: string;
   privacySummary: string;
+  /** The one-click button that reads the clipboard; shown only with `onPasteFromClipboard`. */
+  pasteFromClipboard: string;
 };
 
 export function defaultPasteCodeStrings(providerName: string): PasteCodeSignInStrings {
@@ -46,6 +48,7 @@ export function defaultPasteCodeStrings(providerName: string): PasteCodeSignInSt
     unavailableButton: 'Sign-in unavailable',
     remember: 'Remember on this browser',
     privacySummary: 'How sign-in and privacy work',
+    pasteFromClipboard: 'Paste and connect',
   };
 }
 
@@ -64,6 +67,18 @@ export type PasteCodeSignInProps = {
   onStart: () => void;
   onSubmit: (code: string) => void;
   onCancel: () => void;
+  /**
+   * What the user will see and do on the provider's side (numbered steps, a picture). Shown before
+   * they leave and again beside the paste box, so nothing on the other page comes as a surprise.
+   */
+  guide?: ReactNode;
+  /** Submit as soon as text is pasted into the box, with no second click. */
+  submitOnPaste?: boolean;
+  /**
+   * Adds a one-click button for hosts that can read the clipboard (`navigator.clipboard.readText`
+   * inside this click) and submit what they find.
+   */
+  onPasteFromClipboard?: () => void;
   remember?: { checked: boolean; onChange: (checked: boolean) => void; error?: string };
   /** One short line, always visible, saying who can see what during sign-in. */
   disclosure?: ReactNode;
@@ -86,6 +101,15 @@ export function PasteCodeSignIn(props: PasteCodeSignInProps) {
   const empty = props.code.trim().length === 0;
   useEffect(() => { if (status === 'awaiting-code') input.current?.focus(); }, [status]);
 
+  function pasted(event: ClipboardEvent<HTMLInputElement>) {
+    if (!props.submitOnPaste || exchanging) return;
+    const text = event.clipboardData?.getData('text') ?? '';
+    if (!text.trim()) return;
+    event.preventDefault();
+    props.onCodeChange(text);
+    props.onSubmit(text);
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!empty && !exchanging) props.onSubmit(props.code);
@@ -100,6 +124,8 @@ export function PasteCodeSignIn(props: PasteCodeSignInProps) {
 
     {!available && <p className="byos-signin-unavailable" role="status">{s.unavailable}</p>}
     {props.disclosure && <p className="byos-signin-disclosure">{props.disclosure}</p>}
+
+    {props.guide && <div className="byos-signin-guide">{props.guide}</div>}
 
     {pasting ? <form className="byos-signin-paste" onSubmit={submit}>
       <label className="byos-signin-paste-label" htmlFor={`${id}-code`}>{s.pasteLabel}</label>
@@ -117,9 +143,12 @@ export function PasteCodeSignIn(props: PasteCodeSignInProps) {
         aria-describedby={[`${id}-hint`, props.error ? `${id}-error` : ''].filter(Boolean).join(' ')}
         aria-invalid={status === 'error' ? true : undefined}
         onChange={event => props.onCodeChange(event.target.value)}
+        onPaste={pasted}
       />
       {props.error && <p className="byos-signin-error" id={`${id}-error`} role="alert">{props.error}</p>}
-      <button className="byos-signin-primary" type="submit" disabled={empty || exchanging} aria-busy={exchanging || undefined}>{exchanging ? s.exchanging : s.submit}</button>
+      {props.onPasteFromClipboard && empty && !exchanging
+        ? <button className="byos-signin-primary" type="button" onClick={props.onPasteFromClipboard}>{s.pasteFromClipboard}</button>
+        : <button className="byos-signin-primary" type="submit" disabled={empty || exchanging} aria-busy={exchanging || undefined}>{exchanging ? s.exchanging : s.submit}</button>}
       <div className="byos-signin-progress">
         {status === 'error' && <button className="byos-signin-secondary" type="button" onClick={props.onStart}>{s.reopen} <ByosIcon name="external"/></button>}
         <button className="byos-signin-cancel" type="button" onClick={props.onCancel}>{s.cancel}</button>

@@ -72,6 +72,10 @@ test('callback: reads a pasted address, checks state and the client id', () => {
   assert.deepEqual(readChatGptPlanCallback(' http://127.0.0.1:1455/auth/callback?code=c1&state=state-1&client_id=issued ', attempt), { code: 'c1', clientId: 'issued' });
   assert.deepEqual(readChatGptPlanCallback('code=c1&state=state-1&client_id=issued', attempt), { code: 'c1', clientId: 'issued' });
   assert.deepEqual(readChatGptPlanCallback('?code=c1&state=state-1', { state: 'state-1', clientId: 'saved' }), { code: 'c1', clientId: 'saved' });
+  // Safari's error page: no scheme, wrapped across lines, in curly quotes inside a sentence.
+  const safari = 'Safari Can’t Connect to the Server\nSafari can’t open the page “127.0.0.1:1455/auth/callback?\ncode=ac.1.AAD-_x\n7_ZB--Z9&scope=chatgpt.tokens.use.direct+email&state=state-1&iss=https%3A%2F%2Fauth.openai.com&client_id=oaiapp_Us\nmpa4My” because Safari can’t connect to the server “127.0.0.1”.';
+  assert.deepEqual(readChatGptPlanCallback(safari, attempt), { code: 'ac.1.AAD-_x7_ZB--Z9', clientId: 'oaiapp_UsFmpa4My'.replace('F', '') });
+  assert.deepEqual(readChatGptPlanCallback('This site can’t be reached http://127.0.0.1:1455/auth/callback?code=c1&state=state-1&client_id=issued. ERR_CONNECTION_REFUSED', attempt), { code: 'c1', clientId: 'issued' });
   assert.deepEqual(readChatGptPlanCallback('', attempt), { error: 'missing' });
   assert.deepEqual(readChatGptPlanCallback('123456', attempt), { error: 'missing' });
   assert.deepEqual(readChatGptPlanCallback('http://127.0.0.1:1455/auth/callback?code=c1&state=other&client_id=issued', attempt), { error: 'state-mismatch' });
@@ -166,8 +170,8 @@ test('stream: goes straight to api.openai.com with a plan-shaped body', async ()
   const provider = chatgptPlan({ appName: 'My App', fetch, readCredential: () => token, saveCredential: () => {} });
   assert.equal(provider.id, 'chatgpt');
   assert.deepEqual(provider.signIn, [{ kind: 'pkce', handshakeViaSite: false, completion: 'paste-code' }]);
-  assert.notEqual(provider.webSearch, true);
-  const text = await collect(provider.stream(token, { model: 'gpt-a', effort: 'high', webSearch: true, messages: [{ role: 'system', content: 'rules' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }, { role: 'user', content: 'more' }] }));
+  assert.equal(provider.webSearch, true);
+  const text = await collect(provider.stream(token, { model: 'gpt-a', effort: 'high', messages: [{ role: 'system', content: 'rules' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }, { role: 'user', content: 'more' }] }));
   assert.equal(text, 'Brake later.');
   assert.equal(calls[0].url, 'https://api.openai.com/v1/responses');
   const headers = calls[0].init.headers as Record<string, string>;
@@ -181,6 +185,23 @@ test('stream: goes straight to api.openai.com with a plan-shaped body', async ()
       { role: 'user', content: [{ type: 'input_text', text: 'more' }] },
     ],
   });
+});
+
+test('stream: webSearch adds OpenAI\'s web_search tool and reports its steps and sources', async () => {
+  const token = encodeChatGptPlanCredential({ accessToken: 'at-1', clientId: 'issued', expiresAt: Date.now() + 3600_000 });
+  const { fetch, calls } = fakeFetch(() => sse([
+    { type: 'response.output_item.done', item: { type: 'web_search_call', action: { query: 'njmp track day' } } },
+    { type: 'response.output_item.done', item: { type: 'message', content: [{ type: 'output_text', text: 'Found it.', annotations: [{ type: 'url_citation', url: 'https://example.invalid/event', title: 'Event' }] }] } },
+    completed,
+  ]));
+  const provider = chatgptPlan({ appName: 'My App', fetch, readCredential: () => token, saveCredential: () => {} });
+  const events: Array<Record<string, unknown>> = [];
+  for await (const ev of provider.stream(token, { model: 'm', webSearch: true, messages: [{ role: 'user', content: 'q' }] })) events.push(ev);
+  const body = JSON.parse(String(calls[0].init.body));
+  assert.deepEqual(body.tools, [{ type: 'web_search' }]);
+  assert.deepEqual(events.find(e => e.type === 'search'), { type: 'search', query: 'njmp track day' });
+  assert.deepEqual(events.find(e => e.type === 'source'), { type: 'source', source: { url: 'https://example.invalid/event', title: 'Event' } });
+  assert.equal(events.find(e => e.type === 'text')?.text, 'Found it.');
 });
 
 test('stream: an expiring credential is refreshed first and the rotated one is saved', async () => {

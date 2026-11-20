@@ -235,12 +235,20 @@ export type ChatGptPlanCallback = { code: string; clientId: string } | { error: 
 
 /**
  * Reads what the user pasted: the whole address of the page ChatGPT sent them to
- * (`http://127.0.0.1:1455/auth/callback?code=...&state=...`), or just its query string.
+ * (`http://127.0.0.1:1455/auth/callback?code=...&state=...`), just its query string, or the text of
+ * the browser's error page that quotes it.
  */
 export function readChatGptPlanCallback(pasted: string, attempt: Pick<ChatGptPlanAttempt, 'state' | 'clientId'>): ChatGptPlanCallback {
-  const text = pasted.trim();
-  if (!text || text.length > 8192) return { error: 'missing' };
-  const query = text.includes('?') ? text.slice(text.indexOf('?') + 1).split('#')[0] : text.replace(/^[?#]/, '');
+  if (!pasted.trim() || pasted.length > 16_384) return { error: 'missing' };
+  // People copy this from an address bar, or from the text of the browser's "can't connect" page,
+  // which wraps the address across lines and puts it in quotes inside a sentence. Take the address
+  // out of whatever surrounds it: drop line breaks, then keep the run of URL characters after "?".
+  const text = pasted.replace(/\s*[\r\n]+\s*/g, '').trim();
+  const start = text.search(/[?&]?(?:code|state|error|client_id|scope|iss)=/);
+  if (start < 0) return { error: 'missing' };
+  const marked = text.lastIndexOf('?', start);
+  const from = marked >= 0 && !/\s/.test(text.slice(marked, start)) ? marked + 1 : start;
+  const query = (/^[A-Za-z0-9\-._~%!$&'()*+,;=:@/?]*/.exec(text.slice(from).replace(/^[?&]/, ''))?.[0] ?? '').replace(/['.,;:)]+$/, '');
   let params: URLSearchParams;
   try { params = new URLSearchParams(query); } catch { return { error: 'missing' }; }
   if (!params.has('state') || (!params.has('code') && !params.has('error'))) return { error: 'missing' };
@@ -382,9 +390,10 @@ export async function refreshChatGptPlanCredential(fetcher: ChatGptPlanFetch, cu
 /**
  * The Responses body for plan usage: system messages become `instructions`, the rest the
  * conversation. Plan usage refuses sampling and length fields, so none are sent; `store: false`
- * keeps turns off the account's history.
+ * keeps turns off the account's history. `webSearch` adds OpenAI's built-in `web_search` tool, the one
+ * hosted tool plan usage documents as supported.
  */
-export function buildChatGptPlanBody(model: string, messages: ChatMessage[], effort?: ReasoningEffort): Record<string, unknown> {
+export function buildChatGptPlanBody(model: string, messages: ChatMessage[], effort?: ReasoningEffort, webSearch = false): Record<string, unknown> {
   if (!model || model.length > 128 || /\s/.test(model)) throw new CodexRequestError('Choose a valid ChatGPT model first.');
   const instructions = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const input = messages.filter(m => m.role !== 'system').map(m => ({
@@ -395,6 +404,8 @@ export function buildChatGptPlanBody(model: string, messages: ChatMessage[], eff
   if (chars > MAX_PROMPT_CHARS || !input.length) throw new CodexRequestError('This ChatGPT request is too large.');
   return {
     model, instructions, input, store: false, stream: true,
+    // OpenAI's own web search runs on its side under the user's plan (subject to account policy).
+    ...(webSearch ? { tools: [{ type: 'web_search' }], tool_choice: 'auto' } : {}),
     ...(effort && effort !== 'none' && EFFORTS.has(effort) ? { reasoning: { effort } } : {}),
   };
 }
@@ -471,7 +482,7 @@ export type ChatGptPlanProviderOptions = {
 /**
  * `chatgptPlan()`: a ByosProvider for a ChatGPT plan through the official Sign in with ChatGPT.
  * The token handed to listModels/stream is the encoded credential from `completeChatGptPlanSignIn`.
- * Plain chat only: the plan preview has no hosted tools, so `webSearch` is not offered.
+ * Chat plus OpenAI's web search (`ChatRequest.webSearch`); no other hosted tools exist on plan usage.
  */
 export function chatgptPlan(options: ChatGptPlanProviderOptions): ByosProvider {
   const send: ChatGptPlanFetch = (input, init) => (options.fetch ?? fetch)(input, init);
@@ -513,7 +524,7 @@ export function chatgptPlan(options: ChatGptPlanProviderOptions): ByosProvider {
   }
 
   async function* stream(token: string, request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const serialized = JSON.stringify(buildChatGptPlanBody(request.model, request.messages, request.effort));
+    const serialized = JSON.stringify(buildChatGptPlanBody(request.model, request.messages, request.effort, request.webSearch));
     if (new TextEncoder().encode(serialized).byteLength > MAX_REQUEST_BYTES) throw new CodexRequestError('This ChatGPT request is too large.');
     const { credential, response } = await authorized(token, request.signal, current => send(CHATGPT_PLAN_RESPONSES_URL, {
       method: 'POST',
@@ -543,6 +554,7 @@ export function chatgptPlan(options: ChatGptPlanProviderOptions): ByosProvider {
     id: 'chatgpt',
     displayName: 'ChatGPT',
     signIn: [{ kind: 'pkce', handshakeViaSite: false, completion: 'paste-code' }] satisfies SignInMethod[],
+    webSearch: true,
     availability: () => {
       const reason = options.unavailableReason?.();
       return reason ? { available: false, reason } : { available: true };
