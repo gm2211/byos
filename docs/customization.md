@@ -426,6 +426,32 @@ relay.handleUpgrade(httpServer);
 
 `@byos/codex` takes the TLS fetch and vault callbacks. Use the application's stable namespace for refresh coordination; preserve the user's selected storage lifetime when saving a rotated token. A caller canceled during shared refresh stops waiting, while the refresh saves any rotated grant for the other callers. Inference is never automatically replayed.
 
+## ChatGPT plan sign-in in the browser
+
+`chatgptPlan` from `@byos/codex` is the official Sign in with ChatGPT plan flow for a page, with no relay. Keep the host id and issued client id across sign-outs (OpenAI asks for that); keep the credential in the vault.
+
+```ts
+import { beginChatGptPlanSignIn, chatgptPlan, completeChatGptPlanSignIn, createChatGptPlanRegistration } from '@byos/codex';
+
+const registration = createChatGptPlanRegistration({ prefix: 'my-app-chatgpt:' });
+const provider = chatgptPlan({
+  appName: 'My App', namespace: 'my-app',
+  readCredential: () => vault.read('chatgpt'),
+  saveCredential: value => vault.store('chatgpt', value, vault.persistence('chatgpt')),
+  onRegistrationReset: () => registration.forgetClientId(),
+});
+
+// Step 1, on a click: open OpenAI's page and keep the attempt.
+const { url, attempt } = await beginChatGptPlanSignIn({ appName: 'My App', hostId: registration.hostId(), clientId: registration.clientId() });
+window.open(url, '_blank', 'noopener');
+// Step 2: the person approves, lands on a 127.0.0.1 page that cannot load, and pastes its address.
+const done = await completeChatGptPlanSignIn(attempt, pastedAddress);
+registration.saveClientId(done.clientId);
+vault.store('chatgpt', done.credential, 'browser');
+```
+
+`completeChatGptPlanSignIn` throws `ChatGptPlanAuthError` with fixed text and a `code`: keep the attempt on `pasted` so the person can paste again, and call `registration.forgetClientId()` on `registration-reset`. Show the step with `PasteCodeSignIn`, with strings that say to copy the address of the page that did not load. The adapter is plain chat: it sends `store: false`, `stream: true` and no sampling fields, and does not offer `webSearch`. A credential from the device-code `codex()` adapter is not accepted; the person signs in again. Tests are synthetic and prove request shapes and validation only.
+
 ## Update all consumers
 
 1. Change the kit and run `npm run check`.

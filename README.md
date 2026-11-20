@@ -24,7 +24,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in and Grok subscription refresh) plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
 | `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
-| `@byos/codex` | ChatGPT device sign-in, refresh, models, streaming Responses adapter |
+| `@byos/codex` | ChatGPT adapters for the browser: official Sign in with ChatGPT plan usage with a pasted callback and no relay (`chatgptPlan`), and the legacy device-code adapter over browser TLS (`codex`) |
 | `@byos/server` | Bounded ciphertext relay, provider device-code broker, Claude token relay, and identity-only website OIDC helper |
 
 The shared React UI includes the command palette (`CommandPaletteProvider`), identity-only Sign in with ChatGPT, subscription sign-in, the AI pill and quick-settings panel, and searchable model/effort fields. Applications supply account metadata, callbacks, localized strings, and theme tokens.
@@ -59,6 +59,8 @@ Open the printed loopback URL, choose **Continue with ChatGPT**, authorize plan 
 Eligible Plus/Pro users share their existing plan allowance. A successful connection is not proof of inference: wait for a completed response. Local personal/open-source usage follows OpenAI's current eligibility rules; paid or remotely hosted applications need the applicable OpenAI approval. The independently authored adapter does not include the noncommercial Sign in with ChatGPT DevKit.
 
 Use the [local package API](packages/chatgpt-local/README.md) for a consumer binding. Keep tokens inside the local runtime; expose only account metadata, model choices, optional generation activity metadata, and requested results to the UI. Existing `@byos/codex` browser integrations retain their previous transport and can migrate separately.
+
+For a website, `@byos/codex` `chatgptPlan` runs the same official flow in the page (approved by Giulio, 2026-11-20). OpenAI redirects only to `http://127.0.0.1:1455/auth/callback`, which a website cannot listen on, so the person copies that page's address back into the app (`PasteCodeSignIn` from `@byos/react`). The code exchange, refresh, model list and Responses calls go from the browser straight to `auth.openai.com` and `api.openai.com`; no relay, TLS engine or host server is involved, and the credential stays in the site's browser vault. Tests are synthetic: they do not show OpenAI accepts a live sign-in from any given origin, and hosted use still follows OpenAI's eligibility rules. See [customization](docs/customization.md#chatgpt-plan-sign-in-in-the-browser).
 
 
 ## Website Sign in with ChatGPT
