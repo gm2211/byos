@@ -21,7 +21,9 @@ status and one-time ticket routes, a WebSocket upgrade handler for the tunnels, 
 The relay forwards only TLS ciphertext to fixed hosts: `auth.openai.com` and `chatgpt.com` by default,
 plus `auth.x.ai` when a site opts in with `destinations: ['auth', 'responses', 'xai-auth']` (tunnel at
 `${basePath}/xai-auth`, used only for the browser-owned Grok token refresh; a relay without it returns
-400 for that ticket and 403 for that upgrade). The
+400 for that ticket and 403 for that upgrade), and `platform.claude.com` when it opts in with `'claude-auth'`
+(tunnel at `${basePath}/claude-auth`, used only for the browser-owned Claude sign-in exchange and refresh;
+same 400/403 when not enabled). The
 browser owns the TLS session, so the relay cannot read OpenAI credentials, provider HTTP headers,
 or provider request/response bodies. It does receive the application's own session token (from the
 configured header or cookie) to authorize tickets, plus connection metadata.

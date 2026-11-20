@@ -7,7 +7,9 @@
  * TOKEN RULE (Claude exception, approved 2026-11-01): Anthropic's token endpoint blocks browser
  * origins (CORS), so the authorization-code exchange and each refresh grant go through the host's
  * fixed-destination token relay (`claudeTokenRelayFetch` here, `createClaudeTokenRelay` in
- * @byos/server). The relay neither stores nor logs them. The resulting credential lives only in the
+ * @byos/server). The relay neither stores nor logs them. A browser host that wants the grants to
+ * stay inside browser TLS instead can pass `createCodexTlsFetch(...)` from @byos/browser-tls as the
+ * token fetch (relay destination `claude-auth`, opt-in): the host then sees ciphertext only. The resulting credential lives only in the
  * browser and inference goes browser -> api.anthropic.com, which does allow Bearer calls from pages.
  * Live acceptance of the paste-code redirect URI is unverified.
  */
@@ -25,7 +27,12 @@ const PASTED_CODE_MESSAGES = {
   'email-login-code': "That's the login code from Claude's email. Enter it on Claude's page, then tap Authorize and paste the code Claude shows.",
 } as const;
 
-/** Always called with `CLAUDE_TOKEN_URL`; a host binding decides where the request really goes. */
+/**
+ * Always called with `CLAUDE_TOKEN_URL`; a host binding decides where the request really goes. A
+ * browser host can pass `createCodexTlsFetch(...)` (relay destination `claude-auth`) so the
+ * exchange and refresh grant stay inside browser TLS and the host sees ciphertext only;
+ * `claudeTokenRelayFetch` remains available for hosts that accept the plaintext relay.
+ */
 export type ClaudeTokenFetch = (input: string, init: RequestInit) => Promise<Response>;
 
 const CREDENTIAL_PREFIX = 'claude-subscription:';

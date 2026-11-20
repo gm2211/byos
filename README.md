@@ -23,7 +23,7 @@ Node 22.23.2 or newer is required. One locked workspace builds and tests all pac
 | `@byos/commands` | Framework-free command palette (⌘K): registry, ranking, keyboard rules, Ask flow, standard AI commands, plain DOM renderer |
 | `@byos/providers` | Browser provider adapters (including Claude Pro/Max paste-code sign-in and Grok subscription refresh) plus credential-free on-device catalog and native bridge adapters |
 | `@byos/react` | Optional components and headless hooks; localized strings and scoped CSS tokens |
-| `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes and the Grok token refresh |
+| `@byos/browser-tls` | Verified TLS inside the browser for fixed OpenAI routes, the Grok token refresh and the Claude token exchange/refresh |
 | `@byos/codex` | ChatGPT adapters for the browser: official Sign in with ChatGPT plan usage with a pasted callback and no relay (`chatgptPlan`), and the legacy device-code adapter over browser TLS (`codex`) |
 | `@byos/server` | Bounded ciphertext relay, provider device-code broker, Claude token relay, and identity-only website OIDC helper |
 
@@ -100,7 +100,7 @@ Grok refresh grants never go through a plaintext host relay: the browser sends t
 
 Claude is the one documented exception to "a provider token never touches the site's server": Anthropic's token endpoint blocks browsers, so the authorization-code exchange and each refresh grant pass through the host's fixed-destination token relay (`createClaudeTokenRelay`). The relay neither stores nor logs them, and inference stays browser to Anthropic. The exception was approved on 2026-11-01 and applies only to Claude's two token grants.
 
-Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed destinations (OpenAI, plus `auth.x.ai` only when the site opts into `xai-auth` for the Grok token refresh); it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
+Codex uses verified TLS inside the browser for authentication, refresh, model discovery, and inference. The site's relay forwards only bounded ciphertext to fixed destinations (OpenAI, plus `auth.x.ai` only when the site opts into `xai-auth` for the Grok token refresh, and `platform.claude.com` only when it opts into `claude-auth` for the Claude sign-in exchange and refresh); it receives no provider-readable tokens, headers, payloads, or TLS keys. It can observe destination, handshake metadata, timing, sizes, and application session metadata. There is no plaintext fallback or automatic inference replay.
 
 Hosted browser code remains within the user's trust boundary: it can read browser-held values and can change after review. Synthetic regression tests verify lifecycle and transport boundaries; they do not establish current provider policy, browser CORS support, or authenticated live model acceptance. Applications retain their own capability gates and live verification.
 

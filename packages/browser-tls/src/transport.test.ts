@@ -274,3 +274,66 @@ test('xai-auth request uses the xai-auth relay route and carries no Codex identi
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
 });
+
+const claudeEndpoint = 'https://platform.claude.com/v1/oauth/token';
+const claudeBody = JSON.stringify({ grant_type: 'refresh_token', refresh_token: marker });
+
+test('claude token route validates; every other platform.claude.com shape is rejected before any network use', async t => {
+  assert.equal(validateCodexRequest(claudeEndpoint, { method: 'POST' }).destination, 'claude-auth');
+  for (const [url, init] of [
+    [claudeEndpoint, { method: 'GET' }],
+    [`${claudeEndpoint}?x=1`, { method: 'POST' }],
+    ['https://platform.claude.com/v1/oauth/authorize', { method: 'POST' }],
+    ['https://platform.claude.com/v1/oauth/token/', { method: 'POST' }],
+    ['http://platform.claude.com/v1/oauth/token', { method: 'POST' }],
+    ['https://platform.claude.com:8443/v1/oauth/token', { method: 'POST' }],
+    ['https://user@platform.claude.com/v1/oauth/token', { method: 'POST' }],
+    ['https://platform.claude.com/v1/oauth/token#frag', { method: 'POST' }],
+    ['https://claude.ai/v1/oauth/token', { method: 'POST' }],
+    ['https://api.anthropic.com/v1/oauth/token', { method: 'POST' }],
+    ['https://evil.platform.claude.com/v1/oauth/token', { method: 'POST' }],
+    [claudeEndpoint, { method: 'POST', redirect: 'follow' }],
+  ] as Array<[string, RequestInit]>) {
+    assert.throws(() => validateCodexRequest(url, init), /Unsupported Codex endpoint/, url);
+  }
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  await assert.rejects(transport('https://platform.claude.com/v1/oauth/authorize', { method: 'POST' }), /Unsupported Codex endpoint/);
+  assert.equal(state.requestCount(), 0);
+});
+
+test('claude-auth only allows content-type and accept headers', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  for (const headers of [
+    { Authorization: `Bearer ${marker}` }, { Originator: 'codex_cli_rs' }, { 'OpenAI-Beta': 'x' }, { 'ChatGPT-Account-Id': 'a' },
+  ]) {
+    await assert.rejects(transport(claudeEndpoint, { method: 'POST', headers, body: claudeBody }), /Unsupported Codex request header/);
+  }
+  assert.equal(state.requestCount(), 0);
+});
+
+test('claude-auth request uses the claude-auth relay route and carries no Codex identity headers', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  const controller = new AbortController();
+  const pending = transport(claudeEndpoint, {
+    method: 'POST', body: claudeBody, signal: controller.signal,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  });
+  const socket = await opened();
+  assert.deepEqual(JSON.parse(String(state.records[0].init?.body)), { destination: 'claude-auth' });
+  assert.equal(socket.url, 'wss://app.example/api/relay/claude-auth');
+  socket.onmessage?.({ data: new Uint8Array([42]).buffer });
+  await waitForWrites();
+  const clear = plaintextWrites.map(bytes => new TextDecoder().decode(bytes)).join('');
+  assert.ok(clear.startsWith('POST /v1/oauth/token HTTP/1.1\r\n'));
+  assert.match(clear, /host: platform\.claude\.com\r\n/i);
+  assert.match(clear, /user-agent: Synthetic Test\r\n/i);
+  assert.ok(!/originator|version:|codex_cli_rs/i.test(clear.split('\r\n\r\n')[0]));
+  assert.ok(clear.endsWith(claudeBody));
+  assert.ok(!JSON.stringify(state.records).includes(marker));
+  assert.ok(!wireWrites.some(value => typeof value === 'string' && value.includes(marker)));
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});
