@@ -171,3 +171,59 @@ test('invalid destinations options throw at construction', () => {
   }
   assert.doesNotThrow(() => createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session', destinations: ['xai-auth'] })));
 });
+
+test('default relay refuses claude-auth for tickets and upgrades', async () => {
+  const relay = createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session' }));
+  const headers = { Origin: origin, 'X-App-Session': 'valid' };
+  const rejected = await requestTicket(ticketHandler(relay), headers, { destination: 'claude-auth' });
+  assert.equal(rejected.statusCode, 400);
+  assert.equal((rejected.body as { error: string }).error, 'A valid Codex destination is required.');
+  const { status } = await upgradeStatus(relay, '/api/relay/claude-auth');
+  assert.equal(status, 403);
+});
+
+test('relay with the claude-auth destination issues a ticket and dials only platform.claude.com', async () => {
+  const hosts: string[] = [];
+  const relay = createCodexRelay(relayOptions({
+    sessionHeader: 'X-App-Session',
+    destinations: ['auth', 'claude-auth'],
+    lookupAddresses: async host => { hosts.push(host); return [{ address: '8.8.8.8', family: 4 }]; },
+    connect: async host => { hosts.push(`connect:${host}`); throw new Error('synthetic_unreachable'); },
+  }));
+  const headers = { Origin: origin, 'X-App-Session': 'valid' };
+  const granted = await requestTicket(ticketHandler(relay), headers, { destination: 'claude-auth' });
+  assert.equal(granted.statusCode, 200);
+  assert.equal((await requestTicket(ticketHandler(relay), headers, { destination: 'responses' })).statusCode, 400);
+  assert.equal((await requestTicket(ticketHandler(relay), headers, { destination: 'xai-auth' })).statusCode, 400);
+  const { ticket } = granted.body as { ticket: string };
+  await withServer(relay, port => new Promise<void>(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/relay/claude-auth`, { origin });
+    ws.on('open', () => ws.send(JSON.stringify({ ticket, version: 1 })));
+    ws.on('close', () => resolve());
+    ws.on('error', () => undefined);
+  }));
+  assert.deepEqual(hosts, ['platform.claude.com', 'connect:platform.claude.com']);
+});
+
+test('a ticket issued for auth cannot open the claude-auth tunnel', async () => {
+  const hosts: string[] = [];
+  const relay = createCodexRelay(relayOptions({
+    sessionHeader: 'X-App-Session',
+    destinations: ['auth', 'claude-auth'],
+    lookupAddresses: async host => { hosts.push(host); return [{ address: '8.8.8.8', family: 4 }]; },
+    connect: async () => { throw new Error('synthetic_unreachable'); },
+  }));
+  const granted = await requestTicket(ticketHandler(relay), { Origin: origin, 'X-App-Session': 'valid' }, { destination: 'auth' });
+  const { ticket } = granted.body as { ticket: string };
+  await withServer(relay, port => new Promise<void>(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/relay/claude-auth`, { origin });
+    ws.on('open', () => ws.send(JSON.stringify({ ticket, version: 1 })));
+    ws.on('close', () => resolve());
+    ws.on('error', () => undefined);
+  }));
+  assert.deepEqual(hosts, [], 'no DNS lookup or dial for a mismatched ticket');
+});
+
+test('claude-auth is a valid opt-in destinations entry', () => {
+  assert.doesNotThrow(() => createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session', destinations: ['claude-auth'] })));
+});

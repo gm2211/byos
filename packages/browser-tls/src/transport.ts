@@ -2,7 +2,9 @@
  * Browser-owned TLS to OpenAI for Codex subscriptions. The page runs rustls (WASM) itself and sends
  * only TLS ciphertext through the site's relay (@byos/server createCodexRelay) to fixed hosts.
  * Only the Codex sign-in, refresh, account catalog and Responses routes are allowed, plus the
- * single Grok (xAI) token refresh, POST https://auth.x.ai/oauth2/token (relay opt-in `xai-auth`).
+ * single Grok (xAI) token refresh, POST https://auth.x.ai/oauth2/token (relay opt-in `xai-auth`),
+ * and the single Claude token exchange/refresh, POST https://platform.claude.com/v1/oauth/token
+ * (relay opt-in `claude-auth`).
  *
  * Extracted from Motive's web/src/codex-tls-transport.ts with behavior unchanged; the site supplies
  * the engine loader, its session, the relay path and header, and its client label.
@@ -25,10 +27,11 @@ export class CodexTransportError extends Error {
 
 /**
  * Only these HTTPS operations may receive a browser-held provider credential. TOKEN RULE: the
- * Grok refresh token (POST https://auth.x.ai/oauth2/token) stays inside browser TLS; the relay
- * sees ciphertext only.
+ * Grok refresh token (POST https://auth.x.ai/oauth2/token) and the Claude authorization-code and
+ * refresh grants (POST https://platform.claude.com/v1/oauth/token) stay inside browser TLS; the
+ * relay sees ciphertext only.
  */
-export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: 'auth' | 'responses' | 'xai-auth'; method: string } {
+export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: 'auth' | 'responses' | 'xai-auth' | 'claude-auth'; method: string } {
   let url: URL;
   try { url = new URL(input); } catch { throw new CodexTransportError('Unsupported Codex endpoint.'); }
   const method = (init.method ?? 'GET').toUpperCase();
@@ -39,8 +42,9 @@ export function validateCodexRequest(input: string | URL, init: RequestInit = {}
   const catalog = url.hostname === 'chatgpt.com' && method === 'GET' && url.pathname === '/backend-api/codex/models'
     && /^\?client_version=\d+\.\d+\.\d+$/.test(url.search);
   const xai = url.hostname === 'auth.x.ai' && method === 'POST' && url.pathname === '/oauth2/token' && !url.search;
-  if ((!auth && !response && !catalog && !xai) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
-  return { url, destination: xai ? 'xai-auth' : auth ? 'auth' : 'responses', method };
+  const claude = url.hostname === 'platform.claude.com' && method === 'POST' && url.pathname === '/v1/oauth/token' && !url.search;
+  if ((!auth && !response && !catalog && !xai && !claude) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
+  return { url, destination: claude ? 'claude-auth' : xai ? 'xai-auth' : auth ? 'auth' : 'responses', method };
 }
 
 
@@ -142,7 +146,7 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     let headers: Headers;
     try { headers = new Headers(init.headers); } catch { throw new CodexTransportError('Unsupported Codex request header.'); }
     for (const name of headers.keys()) {
-      const allowed = destination === 'xai-auth'
+      const allowed = destination === 'xai-auth' || destination === 'claude-auth'
         ? ['content-type', 'accept']
         : ['authorization', 'content-type', 'accept', 'chatgpt-account-id', 'originator', 'openai-beta'];
       if (!allowed.includes(name)) {
@@ -152,7 +156,7 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     headers.set('Host', url.hostname);
     headers.set('Connection', 'close');
     headers.set('Accept-Encoding', 'identity');
-    if (destination === 'xai-auth') {
+    if (destination === 'xai-auth' || destination === 'claude-auth') {
       // Not a Codex request: no Codex protocol identity, only the plain client label.
       headers.set('User-Agent', options.clientLabel);
     } else {

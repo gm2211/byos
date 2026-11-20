@@ -34,7 +34,7 @@ fn configuration() -> Arc<ClientConfig> {
     Arc::new(config)
 }
 
-fn permitted_host(host: &str) -> bool { matches!(host, "auth.openai.com" | "chatgpt.com" | "auth.x.ai") }
+fn permitted_host(host: &str) -> bool { matches!(host, "auth.openai.com" | "chatgpt.com" | "auth.x.ai" | "platform.claude.com") }
 fn supported_alpn(protocol: Option<&[u8]>) -> bool { protocol == Some(b"http/1.1".as_slice()) }
 fn failure() -> JsValue { JsValue::from_str("OpenAI TLS verification or transport failed.") }
 
@@ -131,10 +131,12 @@ mod tests {
     use super::*;
     #[test]
     fn only_exact_provider_hosts_are_allowed() {
-        for host in ["auth.openai.com", "chatgpt.com", "auth.x.ai"] { assert!(permitted_host(host)); }
+        for host in ["auth.openai.com", "chatgpt.com", "auth.x.ai", "platform.claude.com"] { assert!(permitted_host(host)); }
         for host in [
             "localhost", "127.0.0.1", "chatgpt.com.", "CHATGPT.COM", "evil.chatgpt.com",
             "AUTH.X.AI", "auth.x.ai.", "evil.auth.x.ai", "x.ai", "api.x.ai",
+            "PLATFORM.CLAUDE.COM", "platform.claude.com.", "evil.platform.claude.com", "claude.com",
+            "api.anthropic.com", "claude.ai",
         ] {
             assert!(!permitted_host(host));
         }
