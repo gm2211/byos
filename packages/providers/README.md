@@ -55,6 +55,11 @@ for both the model list and Messages, never renews the token for it, and throws 
 expired sign-in. `fetchClaudeRetryingBrowserAccess(send, signal?, delays?)` and `isClaudeBrowserAccessDenied(status,
 payload)` are exported for hosts with their own Anthropic calls.
 
+The browser sign-in asks only for `user:inference` (`CLAUDE_BROWSER_OAUTH_SCOPE`), as Motive's working browser sign-in
+does. A token that also carried `user:profile` was refused from a page on every retry (tracked, 2026-11-20), while the
+same account worked in Motive. Native clients (`@byos/claude-local`) keep `CLAUDE_OAUTH_SCOPE`. Not live-verified:
+the scope is the remaining difference from Motive, not a cause Anthropic documents.
+
 - `beginClaudeSignIn(now?, { keepUntilCancelled? })` returns `{ url, attempt }` (claude.ai authorize URL with S256
   PKCE; the attempt expires after 20 minutes unless `keepUntilCancelled`, which lasts until the host drops it).
   `completeClaudeSignIn(tokenFetch, attempt, pasted, signal?)` parses `CODE#STATE`, a bare code or the whole callback

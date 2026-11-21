@@ -16,6 +16,7 @@
 import {
   buildClaudeTokenRequest,
   claudeAuthorizeUrl,
+  CLAUDE_BROWSER_OAUTH_SCOPE,
   CLAUDE_PASTE_REDIRECT_URI,
   CLAUDE_TOKEN_URL,
   readClaudePastedCode,
@@ -221,7 +222,7 @@ export async function beginClaudeSignIn(
  */
 export async function claudeSignInUrl(attempt: ClaudeSignInAttempt): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(attempt.verifier));
-  return claudeAuthorizeUrl({ challenge: toBase64url(new Uint8Array(digest)), state: attempt.state, redirectUri: CLAUDE_PASTE_REDIRECT_URI });
+  return claudeAuthorizeUrl({ challenge: toBase64url(new Uint8Array(digest)), state: attempt.state, redirectUri: CLAUDE_PASTE_REDIRECT_URI, scope: CLAUDE_BROWSER_OAUTH_SCOPE });
 }
 
 const ATTEMPT_PREFIX = 'claude-sign-in-attempt:';

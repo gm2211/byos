@@ -63,6 +63,8 @@ test('beginClaudeSignIn builds the claude.ai URL with S256 PKCE and a fresh atte
   assert.equal(parsed.searchParams.get('redirect_uri'), CLAUDE_PASTE_REDIRECT_URI);
   assert.equal(parsed.searchParams.get('state'), attempt.state);
   assert.equal(parsed.searchParams.get('code_challenge_method'), 'S256');
+  // Inference only, as Motive's browser sign-in: a token that also had user:profile was refused from pages.
+  assert.equal(parsed.searchParams.get('scope'), 'user:inference');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(attempt.verifier));
   const expected = Buffer.from(digest).toString('base64url');
   assert.equal(parsed.searchParams.get('code_challenge'), expected);
