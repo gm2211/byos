@@ -426,6 +426,23 @@ relay.handleUpgrade(httpServer);
 
 `@byos/codex` takes the TLS fetch and vault callbacks. Use the application's stable namespace for refresh coordination; preserve the user's selected storage lifetime when saving a rotated token. A caller canceled during shared refresh stops waiting, while the refresh saves any rotated grant for the other callers. Inference is never automatically replayed.
 
+## ChatGPT in the browser (default)
+
+`chatgpt()` from `@byos/codex` is the default ChatGPT provider for a website (Giulio, 2026-11-21). Its `signIn` lists the device-code method first and the official `pkce` paste method second. Show the code sign-in (`startCodexDeviceSignIn` / `pollCodexDeviceSignIn`, rendered by `DeviceCodeSignIn`) when the host's ciphertext relay is on, with a "Use OpenAI's official sign-in instead" action that switches to the paste flow below. When the relay is off, show only the official flow; the provider stays available either way.
+
+```ts
+import { chatgpt, chatgptCodeSignInAvailable } from '@byos/codex';
+
+const options = {
+  code: { fetch: createCodexTlsFetch({ loadEngine, relayBasePath: '/api/ai/codex-tunnel', clientLabel: 'My App' }), namespace: 'my-app', readCredential, saveCredential, unavailableReason: () => (relayOn ? undefined : 'Code sign-in is off here.') },
+  official: { appName: 'My App', namespace: 'my-app', readCredential, saveCredential, onRegistrationReset: () => registration.forgetClientId() },
+};
+const provider = chatgpt(options);
+const offerCode = chatgptCodeSignInAvailable(options);
+```
+
+Both paths save into the same vault slot. `listModels` and `stream` decode the saved credential and route it to the adapter that made it (`chatgptCredentialPath`), so a person connected by either path keeps working when the host flips the relay gate. Disclose that the code path reuses the Codex client's sign-in and that the relay carries only ciphertext. A live sign-in through the code path worked on tracked.cc on 2026-11-21; tests remain synthetic.
+
 ## ChatGPT plan sign-in in the browser
 
 `chatgptPlan` from `@byos/codex` is the official Sign in with ChatGPT plan flow for a page, with no relay. Keep the host id and issued client id across sign-outs (OpenAI asks for that); keep the credential in the vault.
@@ -450,7 +467,7 @@ registration.saveClientId(done.clientId);
 vault.store('chatgpt', done.credential, 'browser');
 ```
 
-`completeChatGptPlanSignIn` throws `ChatGptPlanAuthError` with fixed text and a `code`: keep the attempt on `pasted` so the person can paste again, and call `registration.forgetClientId()` on `registration-reset`. Show the step with `PasteCodeSignIn`, with strings that say to copy the address of the page that did not load. Pass `guide`, `submitOnPaste` and `onPasteFromClipboard` so the step is one paste. The adapter sends `store: false`, `stream: true` and no sampling fields; `webSearch` adds OpenAI's `web_search` tool, the one hosted tool plan usage supports. A credential from the device-code `codex()` adapter is not accepted; the person signs in again. Tests are synthetic and prove request shapes and validation only.
+`completeChatGptPlanSignIn` throws `ChatGptPlanAuthError` with fixed text and a `code`: keep the attempt on `pasted` so the person can paste again, and call `registration.forgetClientId()` on `registration-reset`. Show the step with `PasteCodeSignIn`, with strings that say to copy the address of the page that did not load. Pass `guide`, `submitOnPaste` and `onPasteFromClipboard` so the step is one paste. The adapter sends `store: false`, `stream: true` and no sampling fields; `webSearch` adds OpenAI's `web_search` tool, the one hosted tool plan usage supports. A credential from the device-code `codex()` adapter is not accepted by `chatgptPlan` alone; use `chatgpt()` to accept both. Tests are synthetic and prove request shapes and validation only.
 
 ## Update all consumers
 

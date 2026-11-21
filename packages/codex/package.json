@@ -1,7 +1,7 @@
 {
   "name": "@byos/codex",
   "version": "0.1.0",
-  "description": "Bring-your-own-subscription ChatGPT adapters: official Sign in with ChatGPT plan usage straight from the browser (chatgptPlan), and the Codex adapter: device-code sign-in, token refresh, account model list and streaming Responses chat, all over the browser-owned TLS fetch from @byos/browser-tls.",
+  "description": "Bring-your-own-subscription ChatGPT adapters: chatgpt() is the default (device-code sign-in first, official sign-in fallback); official Sign in with ChatGPT plan usage straight from the browser (chatgptPlan), and the Codex adapter: device-code sign-in, token refresh, account model list and streaming Responses chat, all over the browser-owned TLS fetch from @byos/browser-tls.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

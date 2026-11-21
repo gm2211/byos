@@ -22,6 +22,13 @@ so tabs never rotate the refresh grant twice, and saves the new one through `sav
 Set `namespace` to a stable site-specific id when multiple apps share an origin; it scopes the Web
 Lock name and avoids unrelated apps contending during refresh. Omit it for the shared default lock.
 
+## Default: `chatgpt()`, code sign-in first with the official fallback
+
+`chatgpt({ code, official })` combines the two adapters (Giulio, 2026-11-21). Its sign-in methods
+are `device-code` then `pkce`; it is available when either path is, and routes each saved
+credential to the adapter that made it (`chatgptCredentialPath`). Use
+`chatgptCodeSignInAvailable({ code })` to decide whether to show the code step.
+
 ## Official ChatGPT plan sign-in, no relay (`chatgptPlan`)
 
 `plan.ts` is OpenAI's official [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)
