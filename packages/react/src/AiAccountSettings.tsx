@@ -107,7 +107,7 @@ function ListAccountSettings(props: AiAccountSettingsProps) {
         label={props.providerName}
         detail={<span className={`byos-account-settings-status byos-account-settings-status-${state}`} role={state === 'expired' ? 'status' : undefined}>{statusText}</span>}
         trailing={reconnect ?? null}/>
-      <div className="byos-list-embed">{props.modelSettings}</div>
+      {props.modelSettings != null && <div className="byos-list-embed">{props.modelSettings}</div>}
     </SettingsList>
     <SettingsList label={strings.accountTab}>
       {props.remember && <SettingsToggleRow label={strings.remember} checked={props.remember.checked} onChange={props.remember.onChange} error={props.remember.error}/>}
