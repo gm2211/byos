@@ -19,6 +19,15 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `CredentialModePicker`: an optional radio group for choosing that mode on an admin, developer or settings screen.
 - `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
 - `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
+- `SettingsList`, `SettingsRow`, `SettingsToggleRow`, `SettingsNav`, `LockNote`, `ProviderAvatar`: the settings-style list primitives behind `layout="list"` (grouped rows, a real checkbox drawn as a switch with `role="switch"`, an icon-only Back button with an accessible name, a one-line lock note). Hosts use them for their own rows so everything lines up.
+
+### Settings-style list layout
+
+`AiProviderPicker`, `PasteCodeSignIn`, `DeviceCodeSignIn` and `AiAccountSettings` take `layout="list"`: every AI sign-in screen becomes a grouped list, like a phone's Settings app. The default presentations are unchanged.
+
+- `AiProviderPicker`: rows with an avatar (`icon`, else the first letter), a one-line `description` (else `badge`) and a chevron, under ordered `groups` headings (e.g. "Use your plan", "Use an API key"); a check marks the selected row.
+- `PasteCodeSignIn` / `DeviceCodeSignIn`: a nav row (icon Back via `onBack`, provider name, plan or "Step 2 of 2"), one primary button, the `disclosure` as a one-line lock note (no box), then rows: a Remember switch, `alternatives` (e.g. "Use an API key instead") and the privacy row, which drills into `privacyDetails` with its own Back instead of expanding. The paste step has an inline icon paste button inside the field and quiet text actions. The stock `connectBody` is dropped in this layout; pass your own to show it.
+- `AiAccountSettings`: no tabs. Group one: the provider status row (Reconnect sits inline on it when expired) and the model settings. Group two: the `remember` switch, `accountSettings` and Switch AI. Then a red Disconnect row (`onDisconnect`) and `toolsSettings`.
 - `SignInWithChatGPT`: localized identity-only website sign-in presentation with approved black/white OpenAI button formats and availability/status slots. The host supplies the start route and its disclosure.
 - `CommandPaletteProvider`, `useCommands`, `usePalette`, `CommandPaletteButton`: the ⌘K palette from `@byos/commands` as React. Features register commands while mounted; the provider owns the dialog, shortcut, focus return, and Ask flow. See the [commands README](../commands/README.md).
 - `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.

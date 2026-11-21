@@ -1,4 +1,5 @@
 export * from './icons.js';
+export * from './SettingsList.js';
 export * from './DialogCloseButton.js';
 export * from './DeviceCodeSignIn.js';
 export * from './PasteCodeSignIn.js';
