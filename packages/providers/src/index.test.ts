@@ -484,3 +484,39 @@ test('Claude plan sign-in: a browser-access refusal never forces a token renewal
   await assert.rejects(() => provider.listModels(token));
   assert.equal(renewals, 1);
 });
+
+test('Claude plan calls go through the host tunnel when given one; API keys stay on fetch', async () => {
+  const { claude, encodeClaudeCredential } = await import('../dist/index.js');
+  const token = encodeClaudeCredential({ accessToken: 'sk-ant-oat01-plan', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 });
+  const tunnelled: Array<{ url: string; init: RequestInit }> = [];
+  const provider = claude({ subscription: {
+    tokenFetch: async () => new Response('{}', { status: 500 }),
+    readCredential: () => token,
+    saveCredential: () => undefined,
+    apiFetch: async (url, init) => {
+      tunnelled.push({ url, init });
+      return url.includes('/models')
+        ? new Response(JSON.stringify({ data: [{ id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' }] }))
+        : sse(['data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}']);
+    },
+  } });
+  const direct = fakeFetch(() => new Response(JSON.stringify({ data: [] })));
+  assert.deepEqual((await provider.listModels(token)).map(m => m.id), ['claude-opus-5-5']);
+  const events = [];
+  for await (const event of provider.stream(token, { model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'hi' }] })) events.push(event);
+  assert.deepEqual(events.filter(e => e.type === 'text').map(e => (e as { text: string }).text), ['ok']);
+  assert.equal(direct.length, 0);
+  assert.equal(tunnelled.length, 2);
+  for (const call of tunnelled) {
+    const h = call.init.headers as Record<string, string>;
+    assert.equal(h.Authorization, 'Bearer sk-ant-oat01-plan');
+    assert.equal(h['anthropic-dangerous-direct-browser-access'], undefined);
+    assert.equal(call.init.redirect, 'error');
+  }
+  assert.equal(tunnelled[1].url, 'https://api.anthropic.com/v1/messages');
+  // An API key is not a plan sign-in: straight to Anthropic by fetch, with the browser opt-in header.
+  await provider.listModels('sk-ant-api03-key');
+  assert.equal(direct.length, 1);
+  assert.equal((direct[0].init?.headers as Record<string, string>)['anthropic-dangerous-direct-browser-access'], 'true');
+  assert.equal(tunnelled.length, 2);
+});

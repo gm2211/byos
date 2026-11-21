@@ -337,3 +337,64 @@ test('claude-auth request uses the claude-auth relay route and carries no Codex 
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
 });
+
+const claudeMessages = 'https://api.anthropic.com/v1/messages';
+
+test('claude-api allows only Messages and the model list on api.anthropic.com', () => {
+  assert.equal(validateCodexRequest(claudeMessages, { method: 'POST' }).destination, 'claude-api');
+  assert.equal(validateCodexRequest('https://api.anthropic.com/v1/models?limit=100', { method: 'GET' }).destination, 'claude-api');
+  assert.equal(validateCodexRequest('https://api.anthropic.com/v1/models?limit=100&after_id=claude-opus-5-5', { method: 'GET' }).destination, 'claude-api');
+  for (const [url, init] of [
+    [claudeMessages, { method: 'GET' }],
+    [`${claudeMessages}?beta=true`, { method: 'POST' }],
+    ['https://api.anthropic.com/v1/messages/batches', { method: 'POST' }],
+    ['https://api.anthropic.com/v1/complete', { method: 'POST' }],
+    ['https://api.anthropic.com/v1/files', { method: 'GET' }],
+    ['https://api.anthropic.com/v1/models', { method: 'GET' }],
+    ['https://api.anthropic.com/v1/models?limit=100&x=1', { method: 'GET' }],
+    ['https://api.anthropic.com/v1/models?limit=100', { method: 'POST' }],
+    ['https://evil.api.anthropic.com/v1/messages', { method: 'POST' }],
+    ['https://api.anthropic.com:8443/v1/messages', { method: 'POST' }],
+    [claudeMessages, { method: 'POST', redirect: 'follow' }],
+  ] as Array<[string, RequestInit]>) {
+    assert.throws(() => validateCodexRequest(url, init), /Unsupported Codex endpoint/, `${init.method} ${url}`);
+  }
+});
+
+test('claude-api allows only the Anthropic headers a plan call needs', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  for (const headers of [
+    { 'anthropic-dangerous-direct-browser-access': 'true' }, { 'x-api-key': marker }, { Originator: 'codex_cli_rs' }, { Origin: 'https://app.example' }, { Cookie: 'a=b' },
+  ]) {
+    await assert.rejects(transport(claudeMessages, { method: 'POST', headers, body: '{}' }), /Unsupported Codex request header/);
+  }
+  assert.equal(state.requestCount(), 0);
+});
+
+test('claude-api request uses its relay route, keeps the token inside TLS and sends no Origin', async t => {
+  const state = prepare(t);
+  const transport = createCodexTlsFetch(state.options);
+  const controller = new AbortController();
+  const body = JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 16, messages: [{ role: 'user', content: 'hi' }] });
+  const pending = transport(claudeMessages, {
+    method: 'POST', body, signal: controller.signal,
+    headers: { Authorization: `Bearer ${marker}`, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'oauth-2025-04-20', 'content-type': 'application/json' },
+  });
+  const socket = await opened();
+  assert.deepEqual(JSON.parse(String(state.records[0].init?.body)), { destination: 'claude-api' });
+  assert.equal(socket.url, 'wss://app.example/api/relay/claude-api');
+  socket.onmessage?.({ data: new Uint8Array([42]).buffer });
+  await waitForWrites();
+  const clear = plaintextWrites.map(bytes => new TextDecoder().decode(bytes)).join('');
+  const head = clear.split('\r\n\r\n')[0];
+  assert.ok(clear.startsWith('POST /v1/messages HTTP/1.1\r\n'));
+  assert.match(head, /host: api\.anthropic\.com\r\n/i);
+  assert.match(head, /authorization: Bearer /i);
+  assert.ok(!/\r\norigin:|originator|codex_cli_rs|dangerous/i.test(head));
+  assert.ok(clear.endsWith(body));
+  assert.ok(!JSON.stringify(state.records).includes(marker));
+  assert.ok(!wireWrites.some(value => typeof value === 'string' && value.includes(marker)));
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});

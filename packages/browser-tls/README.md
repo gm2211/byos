@@ -6,8 +6,11 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 `createCodexTlsFetch(options)` returns a `fetch()` limited to OpenAI's Codex sign-in, refresh,
 account-catalog and Responses routes, plus exactly `POST https://auth.x.ai/oauth2/token` (no query)
 for renewing a Grok token inside browser TLS, and exactly `POST https://platform.claude.com/v1/oauth/token`
-(no query) for the Claude Pro/Max code exchange and refresh grant. Those routes need the relay's opt-in
-`xai-auth` / `claude-auth` destinations, accept only `Content-Type` and `Accept` headers, and send no Codex identity headers. It runs TLS 1.3 inside the page (rustls compiled to WASM,
+(no query) for the Claude Pro/Max code exchange and refresh grant, and Claude plan inference on
+`api.anthropic.com` (exactly `POST /v1/messages` and `GET /v1/models?limit=N[&after_id=ID]`; headers `Authorization`,
+`Content-Type`, `Accept`, `anthropic-version`, `anthropic-beta`). Anthropic refuses plan tokens on calls from a web page
+("CORS requests are not allowed for this Organization"); a call made inside the page's own TLS carries no browser
+Origin. Those routes need the relay's opt-in `xai-auth` / `claude-auth` / `claude-api` destinations, accept only `Content-Type` and `Accept` headers, and send no Codex identity headers. It runs TLS 1.3 inside the page (rustls compiled to WASM,
 certificate-checked against webpki roots) and sends only ciphertext through the site's relay
 (`@byos/server` `createCodexRelay`). The relay cannot read OpenAI credentials, provider HTTP headers, or provider request/response bodies. It does receive the application’s own session token (from the configured header or cookie) to authorize tickets, plus connection metadata.
 
