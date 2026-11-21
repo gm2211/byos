@@ -227,3 +227,27 @@ test('a ticket issued for auth cannot open the claude-auth tunnel', async () => 
 test('claude-auth is a valid opt-in destinations entry', () => {
   assert.doesNotThrow(() => createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session', destinations: ['claude-auth'] })));
 });
+
+test('claude-api is opt-in and dials only api.anthropic.com', async () => {
+  const off = createCodexRelay(relayOptions({ sessionHeader: 'X-App-Session' }));
+  const headers = { Origin: origin, 'X-App-Session': 'valid' };
+  assert.equal((await requestTicket(ticketHandler(off), headers, { destination: 'claude-api' })).statusCode, 400);
+  assert.equal((await upgradeStatus(off, '/api/relay/claude-api')).status, 403);
+  const hosts: string[] = [];
+  const relay = createCodexRelay(relayOptions({
+    sessionHeader: 'X-App-Session',
+    destinations: ['claude-auth', 'claude-api'],
+    lookupAddresses: async host => { hosts.push(host); return [{ address: '8.8.8.8', family: 4 }]; },
+    connect: async host => { hosts.push(`connect:${host}`); throw new Error('synthetic_unreachable'); },
+  }));
+  const granted = await requestTicket(ticketHandler(relay), headers, { destination: 'claude-api' });
+  assert.equal(granted.statusCode, 200);
+  const { ticket } = granted.body as { ticket: string };
+  await withServer(relay, port => new Promise<void>(resolve => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/relay/claude-api`, { origin });
+    ws.on('open', () => ws.send(JSON.stringify({ ticket, version: 1 })));
+    ws.on('close', () => resolve());
+    ws.on('error', () => undefined);
+  }));
+  assert.deepEqual(hosts, ['api.anthropic.com', 'connect:api.anthropic.com']);
+});

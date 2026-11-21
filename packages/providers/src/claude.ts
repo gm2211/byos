@@ -77,13 +77,19 @@ export function claudeCredentialAllowed(raw: string, subscriptionsPaused = false
   return !(subscriptionsPaused && isClaudeSubscriptionCredential(raw));
 }
 
-function headers(key: string, json: boolean): Record<string, string> {
+/**
+ * How a request reaches api.anthropic.com: `fetch` from the page, or a host transport (the browser-TLS
+ * `claude-api` tunnel, `createCodexTlsFetch`) whose calls carry no browser Origin.
+ */
+export type ClaudeTransport = (input: string, init: RequestInit) => Promise<Response>;
+
+function headers(key: string, json: boolean, tunnelled = false): Record<string, string> {
   const subscription = isClaudeSubscriptionCredential(key);
   return {
     ...(subscription ? { Authorization: `Bearer ${key.trim()}`, 'anthropic-beta': CLAUDE_OAUTH_BETA } : { 'x-api-key': key }),
     'anthropic-version': ANTHROPIC_VERSION,
-    // Anthropic requires this opt-in for calls made straight from a browser page.
-    'anthropic-dangerous-direct-browser-access': 'true',
+    // Anthropic requires this opt-in for calls made straight from a browser page (not through a tunnel).
+    ...(tunnelled ? {} : { 'anthropic-dangerous-direct-browser-access': 'true' }),
     ...(json ? { 'content-type': 'application/json' } : {}),
   };
 }
@@ -172,13 +178,14 @@ function requireKey(key: string, paused: boolean): void {
   if (!claudeCredentialAllowed(key, paused)) throw new ProviderRequestError(CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE, 403);
 }
 
-export async function listClaudeModels(key: string, signal?: AbortSignal, subscriptionsPaused = false): Promise<CatalogModel[]> {
+export async function listClaudeModels(key: string, signal?: AbortSignal, subscriptionsPaused = false, transport?: ClaudeTransport): Promise<CatalogModel[]> {
+  const send: ClaudeTransport = transport ?? ((input, init) => fetch(input, init));
   requireKey(key, subscriptionsPaused);
   const models: CatalogModel[] = [];
   let after = '';
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const url = `${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`;
-    const response = await fetchClaudeRetryingBrowserAccess(() => fetch(url, { headers: headers(key, false), signal, redirect: 'error' }), signal);
+    const response = await fetchClaudeRetryingBrowserAccess(() => send(url, { headers: headers(key, false, Boolean(transport)), signal, redirect: 'error' }), signal);
     const payload = await response.json().catch(() => ({})) as { data?: unknown; has_more?: unknown; last_id?: unknown };
     if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude model list failed (${response.status}).`, response.status);
     models.push(...parseAnthropicModels(payload.data));
@@ -207,7 +214,8 @@ function claudeWebSources(items: unknown[], seen: Set<string>): WebSource[] {
 }
 
 /** Streams POST /v1/messages as ChatEvents. System messages become the top-level `system`. */
-export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = false): AsyncGenerator<ChatEvent> {
+export async function* streamClaude(key: string, request: ChatRequest, subscriptionsPaused = false, transport?: ClaudeTransport): AsyncGenerator<ChatEvent> {
+  const send: ClaudeTransport = transport ?? ((input, init) => fetch(input, init));
   requireKey(key, subscriptionsPaused);
   const userSystem = request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n\n');
   const subscription = isClaudeSubscriptionCredential(key);
@@ -230,11 +238,11 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   delete body.temperature;
   if (!request.effort) delete body.output_config;
   if (body.system === '') delete body.system;
-  const response = await sendProviderRequest(() => fetchClaudeRetryingBrowserAccess(() => fetch(`${API}/messages`, {
+  const response = await sendProviderRequest(() => fetchClaudeRetryingBrowserAccess(() => send(`${API}/messages`, {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
-    headers: headers(key, true),
+    headers: headers(key, true, Boolean(transport)),
     body: JSON.stringify(body),
   }), request.signal), {
     provider: { name: 'Claude', credential: subscription ? 'subscription' : 'api-key', sharedLimitNote: subscription ? 'Claude.ai and Claude Code count toward the same limit.' : undefined },
@@ -314,6 +322,13 @@ export type ClaudeSubscriptionOptions = {
   saveCredential: (value: string) => void;
   /** Site-specific suffix for the cross-tab Web Lock. */
   namespace?: string;
+  /**
+   * How plan-token calls (Messages, the model list) reach api.anthropic.com. Anthropic refuses plan
+   * tokens on calls from a web page ("CORS requests are not allowed for this Organization"), so a
+   * browser host passes its browser-TLS fetch (`createCodexTlsFetch`, relay destination `claude-api`):
+   * the page runs TLS itself and the host relays ciphertext only. API keys still go by `fetch`.
+   */
+  apiFetch?: ClaudeTransport;
 };
 
 export type ClaudeProviderOptions = {
@@ -331,6 +346,10 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
     saveCredential: value => subscription.saveCredential(value),
     reconnectError: () => new ClaudeReconnectRequiredError(),
   });
+
+  /** A plan sign-in's calls go through the host's tunnel when it has one; API keys go by fetch. */
+  const transportFor = (token: string): ClaudeTransport | undefined =>
+    subscription?.apiFetch && isClaudeSubscriptionRecord(token) ? subscription.apiFetch : undefined;
 
   /** The string to send as the key: an encoded record becomes its (refreshed) access token. */
   async function accessToken(token: string, force: boolean, signal?: AbortSignal): Promise<string> {
@@ -368,10 +387,10 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
       : [API_KEY_METHOD],
     availability: () => ({ available: true }),
     webSearch: true,
-    listModels: (token, signal) => withRetry(token, signal, key => listClaudeModels(key, signal, paused)),
+    listModels: (token, signal) => withRetry(token, signal, key => listClaudeModels(key, signal, paused, transportFor(token))),
     async *stream(token, request) {
       const key = await accessToken(token, false, request.signal);
-      const first = streamClaude(key, request, paused);
+      const first = streamClaude(key, request, paused, transportFor(token));
       let started = false;
       try {
         for await (const event of first) { started = true; yield event; }
@@ -380,7 +399,7 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
         if (started || !(error instanceof ProviderRequestError) || error instanceof ClaudeBrowserAccessDeniedError || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
       }
       const retryKey = await accessToken(subscription?.readCredential() || token, true, request.signal);
-      yield* streamClaude(retryKey, request, paused);
+      yield* streamClaude(retryKey, request, paused, transportFor(token));
     },
   };
 }

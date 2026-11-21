@@ -4,7 +4,8 @@
  * Only the Codex sign-in, refresh, account catalog and Responses routes are allowed, plus the
  * single Grok (xAI) token refresh, POST https://auth.x.ai/oauth2/token (relay opt-in `xai-auth`),
  * and the single Claude token exchange/refresh, POST https://platform.claude.com/v1/oauth/token
- * (relay opt-in `claude-auth`).
+ * (relay opt-in `claude-auth`), and Claude plan inference, POST https://api.anthropic.com/v1/messages and
+ * GET /v1/models (relay opt-in `claude-api`).
  *
  * Extracted from Motive's web/src/codex-tls-transport.ts with behavior unchanged; the site supplies
  * the engine loader, its session, the relay path and header, and its client label.
@@ -31,7 +32,9 @@ export class CodexTransportError extends Error {
  * refresh grants (POST https://platform.claude.com/v1/oauth/token) stay inside browser TLS; the
  * relay sees ciphertext only.
  */
-export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: 'auth' | 'responses' | 'xai-auth' | 'claude-auth'; method: string } {
+export type CodexDestination = 'auth' | 'responses' | 'xai-auth' | 'claude-auth' | 'claude-api';
+
+export function validateCodexRequest(input: string | URL, init: RequestInit = {}): { url: URL; destination: CodexDestination; method: string } {
   let url: URL;
   try { url = new URL(input); } catch { throw new CodexTransportError('Unsupported Codex endpoint.'); }
   const method = (init.method ?? 'GET').toUpperCase();
@@ -43,8 +46,14 @@ export function validateCodexRequest(input: string | URL, init: RequestInit = {}
     && /^\?client_version=\d+\.\d+\.\d+$/.test(url.search);
   const xai = url.hostname === 'auth.x.ai' && method === 'POST' && url.pathname === '/oauth2/token' && !url.search;
   const claude = url.hostname === 'platform.claude.com' && method === 'POST' && url.pathname === '/v1/oauth/token' && !url.search;
-  if ((!auth && !response && !catalog && !xai && !claude) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
-  return { url, destination: claude ? 'claude-auth' : xai ? 'xai-auth' : auth ? 'auth' : 'responses', method };
+  // Claude plan inference (relay opt-in `claude-api`): Anthropic refuses plan tokens on calls from a web
+  // page, so the page sends them inside its own TLS, where no browser Origin header exists.
+  const claudeMessages = url.hostname === 'api.anthropic.com' && method === 'POST' && url.pathname === '/v1/messages' && !url.search;
+  const claudeModels = url.hostname === 'api.anthropic.com' && method === 'GET' && url.pathname === '/v1/models'
+    && /^\?limit=\d{1,4}(&after_id=[A-Za-z0-9._-]{1,128})?$/.test(url.search);
+  const claudeApi = claudeMessages || claudeModels;
+  if ((!auth && !response && !catalog && !xai && !claude && !claudeApi) || (init.redirect && init.redirect !== 'error')) throw new CodexTransportError('Unsupported Codex endpoint.');
+  return { url, destination: claudeApi ? 'claude-api' : claude ? 'claude-auth' : xai ? 'xai-auth' : auth ? 'auth' : 'responses', method };
 }
 
 
@@ -148,7 +157,9 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     for (const name of headers.keys()) {
       const allowed = destination === 'xai-auth' || destination === 'claude-auth'
         ? ['content-type', 'accept']
-        : ['authorization', 'content-type', 'accept', 'chatgpt-account-id', 'originator', 'openai-beta'];
+        : destination === 'claude-api'
+          ? ['authorization', 'content-type', 'accept', 'anthropic-version', 'anthropic-beta']
+          : ['authorization', 'content-type', 'accept', 'chatgpt-account-id', 'originator', 'openai-beta'];
       if (!allowed.includes(name)) {
         throw new CodexTransportError('Unsupported Codex request header.');
       }
@@ -156,7 +167,7 @@ export function createCodexTlsFetch(options: CodexTlsFetchOptions) {
     headers.set('Host', url.hostname);
     headers.set('Connection', 'close');
     headers.set('Accept-Encoding', 'identity');
-    if (destination === 'xai-auth' || destination === 'claude-auth') {
+    if (destination === 'xai-auth' || destination === 'claude-auth' || destination === 'claude-api') {
       // Not a Codex request: no Codex protocol identity, only the plain client label.
       headers.set('User-Agent', options.clientLabel);
     } else {
