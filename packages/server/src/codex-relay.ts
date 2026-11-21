@@ -19,7 +19,7 @@ import type { IncomingMessage, Server } from 'node:http';
 import express from 'express';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-const HOSTS = { auth: 'auth.openai.com', responses: 'chatgpt.com', 'xai-auth': 'auth.x.ai', 'claude-auth': 'platform.claude.com' } as const;
+const HOSTS = { auth: 'auth.openai.com', responses: 'chatgpt.com', 'xai-auth': 'auth.x.ai', 'claude-auth': 'platform.claude.com', 'claude-api': 'api.anthropic.com' } as const;
 export type Destination = keyof typeof HOSTS;
 const DEFAULT_DESTINATIONS: readonly Destination[] = ['auth', 'responses'];
 type Ticket = {
@@ -140,7 +140,9 @@ export type CodexRelayOptions = {
    * chatgpt.com:443). `'xai-auth'` is opt-in and maps to auth.x.ai:443, tunnelled at
    * `${basePath}/xai-auth`; it exists only for the browser-owned Grok token refresh. `'claude-auth'`
    * is likewise opt-in, maps to platform.claude.com:443 at `${basePath}/claude-auth`, and exists only
-   * for the browser-owned Claude sign-in exchange and refresh. Hosts stay
+   * for the browser-owned Claude sign-in exchange and refresh. `'claude-api'` is opt-in, maps to
+   * api.anthropic.com:443 at `${basePath}/claude-api`, and carries Claude plan inference (Messages and
+   * the model list), which Anthropic refuses from a web page. Hosts stay
    * fixed and ciphertext-only; a disabled destination gets a 400 ticket and a 403 upgrade. */
   destinations?: Destination[];
   /** Request header carrying the site's session token on ticket requests. Configure this or
@@ -198,7 +200,7 @@ export function createCodexRelay(options: CodexRelayOptions) {
   }
   const enabledDestinations = new Set<Destination>(requested);
   const validDestination = (value: unknown): value is Destination => knownDestination(value) && enabledDestinations.has(value);
-  const PATHS = { auth: `${base}/auth`, responses: `${base}/responses`, 'xai-auth': `${base}/xai-auth`, 'claude-auth': `${base}/claude-auth` } as const;
+  const PATHS = { auth: `${base}/auth`, responses: `${base}/responses`, 'xai-auth': `${base}/xai-auth`, 'claude-auth': `${base}/claude-auth`, 'claude-api': `${base}/claude-api` } as const;
   const lookupAddresses = options.lookupAddresses ?? (async host => {
     const addresses = await lookup(host, { all: true, verbatim: true });
     if (!addresses.length || addresses.some(({ address }) => !publicAddress(address))) throw new Error('destination_unavailable');
@@ -453,7 +455,7 @@ export function createCodexRelay(options: CodexRelayOptions) {
   function handleUpgrade(server: Server) {
     server.on('upgrade', (req: IncomingMessage, socket, head) => {
       const path = req.url;
-      const matched = path === PATHS.auth ? 'auth' : path === PATHS.responses ? 'responses' : path === PATHS['xai-auth'] ? 'xai-auth' : path === PATHS['claude-auth'] ? 'claude-auth' : undefined;
+      const matched = path === PATHS.auth ? 'auth' : path === PATHS.responses ? 'responses' : path === PATHS['xai-auth'] ? 'xai-auth' : path === PATHS['claude-auth'] ? 'claude-auth' : path === PATHS['claude-api'] ? 'claude-api' : undefined;
       const destination = matched && enabledDestinations.has(matched) ? matched : undefined;
       const origin = req.headers.origin;
       if (!accepting || !featureEnabled()) { rejectUpgrade(socket, 503, 'Service Unavailable'); return; }

@@ -55,6 +55,11 @@ for both the model list and Messages, never renews the token for it, and throws 
 expired sign-in. `fetchClaudeRetryingBrowserAccess(send, signal?, delays?)` and `isClaudeBrowserAccessDenied(status,
 payload)` are exported for hosts with their own Anthropic calls.
 
+If the refusal is steady for an account, retries cannot help: pass `subscription.apiFetch`, a `createCodexTlsFetch` from
+`@byos/browser-tls` whose relay enables the `claude-api` destination. A plan sign-in's Messages and model-list calls then
+run inside the page's own TLS to api.anthropic.com, with no browser Origin and without the
+`anthropic-dangerous-direct-browser-access` header; the host relays ciphertext only. API keys still use `fetch`.
+
 The browser sign-in asks only for `user:inference` (`CLAUDE_BROWSER_OAUTH_SCOPE`), as Motive's working browser sign-in
 does. A token that also carried `user:profile` was refused from a page on every retry (tracked, 2026-11-20), while the
 same account worked in Motive. Native clients (`@byos/claude-local`) keep `CLAUDE_OAUTH_SCOPE`. Not live-verified:
