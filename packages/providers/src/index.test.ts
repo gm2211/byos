@@ -430,3 +430,57 @@ test('Claude reports each web search query once its input has streamed', async (
   for await (const event of claude().stream('sk-ant-api03-x', { model: 'm', messages: [{ role: 'user', content: 'find' }], webSearch: true })) events.push(event);
   assert.deepEqual(events, [{ type: 'search', query: 'VIR 2027' }, { type: 'text', text: 'ok' }, { type: 'done' }]);
 });
+
+test('Claude: Anthropic\'s intermittent browser-access refusal is retried, not treated as an expired sign-in', async () => {
+  const { claude, fetchClaudeRetryingBrowserAccess, isClaudeBrowserAccessDenied, ClaudeBrowserAccessDeniedError } = await import('../dist/index.js');
+  const denied = () => new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'CORS requests are not allowed for this Organization because of its settings. If you believe this in error, contact support at https://support.anthropic.com/.' } }), { status: 401 });
+  assert.equal(isClaudeBrowserAccessDenied(401, { error: { message: 'CORS requests are not allowed for this Organization because x' } }), true);
+  assert.equal(isClaudeBrowserAccessDenied(401, { error: { message: 'OAuth access token is invalid.' } }), false);
+  assert.equal(isClaudeBrowserAccessDenied(403, { error: { message: 'CORS requests are not allowed for this Organization' } }), false);
+
+  // Allowed on the third try: the model list comes back.
+  let n = 0;
+  const rows = () => new Response(JSON.stringify({ data: [{ id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' }] }));
+  const ok = await fetchClaudeRetryingBrowserAccess(async () => (++n < 3 ? denied() : rows()), undefined, [0, 0, 0]);
+  assert.equal(ok.status, 200);
+  assert.equal(n, 3);
+
+  // Refused every time: a ClaudeBrowserAccessDeniedError after the last wait, one try per delay plus one.
+  n = 0;
+  await assert.rejects(() => fetchClaudeRetryingBrowserAccess(async () => { n++; return denied(); }, undefined, [0, 0]),
+    (error: Error) => error instanceof ClaudeBrowserAccessDeniedError && (error as { status?: number }).status === 401);
+  assert.equal(n, 3);
+
+  // Another 401 is returned untouched for the caller's own handling.
+  const other = await fetchClaudeRetryingBrowserAccess(async () => new Response(JSON.stringify({ error: { message: 'OAuth access token is invalid.' } }), { status: 401 }), undefined, [0]);
+  assert.equal(other.status, 401);
+
+  // Through the provider: a refusal then a success lists models (real 400 ms wait).
+  let calls = 0;
+  fakeFetch(() => (++calls === 1 ? denied() : rows()));
+  assert.deepEqual((await claude().listModels('sk-ant-oat01-x')).map(m => m.id), ['claude-opus-5-5']);
+  assert.equal(calls, 2);
+});
+
+test('Claude plan sign-in: a browser-access refusal never forces a token renewal', async () => {
+  const { claude, encodeClaudeCredential, ClaudeBrowserAccessDeniedError, CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS } = await import('../dist/index.js');
+  assert.deepEqual([...CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS], [400, 1200, 3000, 6000]);
+  const token = encodeClaudeCredential({ accessToken: 'sk-ant-oat01-live', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 });
+  let renewals = 0;
+  const provider = claude({ subscription: {
+    tokenFetch: async () => { renewals++; return new Response('{}', { status: 500 }); },
+    readCredential: () => token,
+    saveCredential: () => undefined,
+  } });
+  const err = new ClaudeBrowserAccessDeniedError();
+  assert.equal(err.name, 'ClaudeBrowserAccessDeniedError');
+  assert.equal(err.status, 401);
+  // Refused on every try (the real waits, about 10.6 s): the error says so and nothing renews.
+  fakeFetch(() => new Response(JSON.stringify({ error: { message: 'CORS requests are not allowed for this Organization because of its settings.' } }), { status: 401 }));
+  await assert.rejects(() => provider.listModels(token), (error: Error) => error instanceof ClaudeBrowserAccessDeniedError);
+  assert.equal(renewals, 0);
+  // A plain 401 (bad token) still renews once.
+  fakeFetch(() => new Response(JSON.stringify({ error: { message: 'OAuth access token is invalid.' } }), { status: 401 }));
+  await assert.rejects(() => provider.listModels(token));
+  assert.equal(renewals, 1);
+});

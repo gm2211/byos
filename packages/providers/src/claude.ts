@@ -88,6 +88,61 @@ function headers(key: string, json: boolean): Record<string, string> {
   };
 }
 
+/**
+ * Anthropic's refusal of a call made from a web page: a 401 whose message says CORS requests are not
+ * allowed for the organization. For Claude plan accounts it is intermittent (Motive measured
+ * 2026-09-26 that the same account is allowed moments later; tracked hit it on a fresh sign-in
+ * 2026-11-20), so it is not an expired sign-in: retried after short waits, never answered with a
+ * token renewal. Ported from Motive's web/src/anthropic.ts.
+ */
+export const CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS: readonly number[] = [400, 1200, 3000, 6000];
+const BROWSER_ACCESS_DENIED = 'CORS requests are not allowed for this Organization';
+export const CLAUDE_BROWSER_ACCESS_DENIED_NOTE = 'Anthropic is turning down calls from this web page for your Claude account right now. It does this on and off, so try again in a minute.';
+
+/** The browser-access refusal after every retry: the credential is fine, so hosts must not treat it as expired. */
+export class ClaudeBrowserAccessDeniedError extends ProviderRequestError {
+  constructor(message = CLAUDE_BROWSER_ACCESS_DENIED_NOTE) {
+    super(message, 401);
+    this.name = 'ClaudeBrowserAccessDeniedError';
+  }
+}
+
+export function isClaudeBrowserAccessDenied(status: number, payload: unknown): boolean {
+  if (status !== 401) return false;
+  const message = (payload as { error?: { message?: unknown } } | null | undefined)?.error?.message;
+  return typeof message === 'string' && message.includes(BROWSER_ACCESS_DENIED);
+}
+
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason ?? new DOMException('Aborted', 'AbortError')); return; }
+    const onAbort = () => { clearTimeout(timer); reject(signal?.reason ?? new DOMException('Aborted', 'AbortError')); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * fetch() to api.anthropic.com that asks again after the browser-access refusal, waiting
+ * `delays` between tries, and throws ClaudeBrowserAccessDeniedError if every try is refused. A 401
+ * means the model never ran, so asking again cannot bill twice. Any other answer is returned as is.
+ */
+export async function fetchClaudeRetryingBrowserAccess(
+  send: () => Promise<Response>,
+  signal?: AbortSignal,
+  delays: readonly number[] = CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await send();
+    if (response.status !== 401) return response;
+    const payload = await response.clone().json().catch(() => undefined);
+    if (!isClaudeBrowserAccessDenied(response.status, payload)) return response;
+    await response.body?.cancel().catch(() => undefined);
+    if (attempt >= delays.length) throw new ClaudeBrowserAccessDeniedError();
+    await abortableDelay(delays[attempt], signal);
+  }
+}
+
 type AnthropicModelRow = {
   id?: unknown;
   display_name?: unknown;
@@ -122,7 +177,8 @@ export async function listClaudeModels(key: string, signal?: AbortSignal, subscr
   const models: CatalogModel[] = [];
   let after = '';
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const response = await fetch(`${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`, { headers: headers(key, false), signal, redirect: 'error' });
+    const url = `${API}/models?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ''}`;
+    const response = await fetchClaudeRetryingBrowserAccess(() => fetch(url, { headers: headers(key, false), signal, redirect: 'error' }), signal);
     const payload = await response.json().catch(() => ({})) as { data?: unknown; has_more?: unknown; last_id?: unknown };
     if (!response.ok) throw new ProviderRequestError(safeProviderErrorText(payload, key) ?? `Claude model list failed (${response.status}).`, response.status);
     models.push(...parseAnthropicModels(payload.data));
@@ -174,13 +230,13 @@ export async function* streamClaude(key: string, request: ChatRequest, subscript
   delete body.temperature;
   if (!request.effort) delete body.output_config;
   if (body.system === '') delete body.system;
-  const response = await sendProviderRequest(() => fetch(`${API}/messages`, {
+  const response = await sendProviderRequest(() => fetchClaudeRetryingBrowserAccess(() => fetch(`${API}/messages`, {
     method: 'POST',
     signal: request.signal,
     redirect: 'error',
     headers: headers(key, true),
     body: JSON.stringify(body),
-  }), {
+  }), request.signal), {
     provider: { name: 'Claude', credential: subscription ? 'subscription' : 'api-key', sharedLimitNote: subscription ? 'Claude.ai and Claude Code count toward the same limit.' : undefined },
     lane: request.lane,
     signal: request.signal,
@@ -299,7 +355,7 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
     const key = await accessToken(token, false, signal);
     try { return await run(key); }
     catch (error) {
-      if (!(error instanceof ProviderRequestError) || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
+      if (!(error instanceof ProviderRequestError) || error instanceof ClaudeBrowserAccessDeniedError || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
       return run(await accessToken(subscription?.readCredential() || token, true, signal));
     }
   }
@@ -321,7 +377,7 @@ export function claude(options: ClaudeProviderOptions = {}): ByosProvider {
         for await (const event of first) { started = true; yield event; }
         return;
       } catch (error) {
-        if (started || !(error instanceof ProviderRequestError) || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
+        if (started || !(error instanceof ProviderRequestError) || error instanceof ClaudeBrowserAccessDeniedError || error.status !== 401 || !isClaudeSubscriptionRecord(token)) throw error;
       }
       const retryKey = await accessToken(subscription?.readCredential() || token, true, request.signal);
       yield* streamClaude(retryKey, request, paused);
