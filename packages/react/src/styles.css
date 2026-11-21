@@ -316,7 +316,7 @@
 .byos-list-row-action:disabled { cursor: progress; opacity: .8; }
 .byos-list-row-action-slot { flex: none; display: flex; }
 .byos-list-row-action-slot .byos-signin-primary { width: auto; min-height: 32px; padding: 0 12px; }
-.byos-list-avatar { position: relative; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--byos-surface-raised, #eef0f4); color: var(--byos-text, #1b1f27); font: 700 12px/1 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
+.byos-list-avatar { position: relative; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--byos-surface, #ffffff); box-shadow: inset 0 0 0 1px var(--byos-line-strong, #cdd2da); color: var(--byos-text, #1b1f27); font: 700 12px/1 var(--byos-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
 .byos-list-avatar svg, .byos-list-avatar img { width: 18px; height: 18px; }
 .byos-list-avatar .byos-account-settings-dot { width: 9px; height: 9px; right: -2px; bottom: -2px; border-color: var(--byos-surface-soft, #f6f7f9); }
 .byos-switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 999px; background: var(--byos-line-strong, #cdd2da); cursor: pointer; transition: background 150ms ease; }
