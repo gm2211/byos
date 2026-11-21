@@ -97,7 +97,7 @@ function headers(key: string, json: boolean): Record<string, string> {
  */
 export const CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS: readonly number[] = [400, 1200, 3000, 6000];
 const BROWSER_ACCESS_DENIED = 'CORS requests are not allowed for this Organization';
-export const CLAUDE_BROWSER_ACCESS_DENIED_NOTE = 'Anthropic is turning down calls from this web page for your Claude account right now. It does this on and off, so try again in a minute.';
+export const CLAUDE_BROWSER_ACCESS_DENIED_NOTE = 'Anthropic is turning down calls from this web page for your Claude account. Disconnect Claude and connect it again; if it still happens, try again in a few minutes.';
 
 /** The browser-access refusal after every retry: the credential is fine, so hosts must not treat it as expired. */
 export class ClaudeBrowserAccessDeniedError extends ProviderRequestError {

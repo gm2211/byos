@@ -17,6 +17,13 @@ export const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 export const CLAUDE_AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize';
 export const CLAUDE_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
 export const CLAUDE_OAUTH_SCOPE = 'user:profile user:inference';
+/**
+ * The scope a browser sign-in asks for: inference only, as Motive's working browser sign-in does.
+ * Calls from a web page with a token that also carries `user:profile` were refused by Anthropic with
+ * "CORS requests are not allowed for this Organization" (tracked, 2026-11-20, on every retry), while
+ * Motive's `user:inference` token worked on the same account. Native clients keep CLAUDE_OAUTH_SCOPE.
+ */
+export const CLAUDE_BROWSER_OAUTH_SCOPE = 'user:inference';
 /** platform.claude.com page that displays a `CODE#STATE` string for the user to copy back. Live acceptance is unverified. */
 export const CLAUDE_PASTE_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
 /** Beta flags a subscription Bearer token needs. */
@@ -24,7 +31,7 @@ export const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20,claude-code-20250219';
 /** Subscription tokens are only honored for requests that open with this system block. */
 export const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-export type ClaudeAuthorizeParams = { challenge: string; state: string; redirectUri: string };
+export type ClaudeAuthorizeParams = { challenge: string; state: string; redirectUri: string; scope?: string };
 
 export function claudeAuthorizeUrl(params: ClaudeAuthorizeParams): string {
   const url = new URL(CLAUDE_AUTHORIZE_URL);
@@ -33,7 +40,7 @@ export function claudeAuthorizeUrl(params: ClaudeAuthorizeParams): string {
     client_id: CLAUDE_OAUTH_CLIENT_ID,
     response_type: 'code',
     redirect_uri: params.redirectUri,
-    scope: CLAUDE_OAUTH_SCOPE,
+    scope: params.scope ?? CLAUDE_OAUTH_SCOPE,
     code_challenge: params.challenge,
     code_challenge_method: 'S256',
     state: params.state,
