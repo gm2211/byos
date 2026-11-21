@@ -47,6 +47,14 @@ token. In a browser, pass `claude({ subscription: { tokenFetch, readCredential, 
 method, and the stored credential (`claude-subscription:` + base64url JSON) is refreshed near expiry under a Web Lock
 and once more after a 401.
 
+Anthropic sometimes answers a call from a browser page with a 401 saying "CORS requests are not allowed for this
+Organization", for plan accounts that are allowed moments later (measured in Motive 2026-09-26; seen in tracked on a
+fresh sign-in 2026-11-20). `claude()` asks again after `CLAUDE_BROWSER_ACCESS_RETRY_DELAYS_MS` (0.4, 1.2, 3 and 6 s)
+for both the model list and Messages, never renews the token for it, and throws `ClaudeBrowserAccessDeniedError`
+(status 401, `CLAUDE_BROWSER_ACCESS_DENIED_NOTE`) if every try is refused. Hosts must not show that error as an
+expired sign-in. `fetchClaudeRetryingBrowserAccess(send, signal?, delays?)` and `isClaudeBrowserAccessDenied(status,
+payload)` are exported for hosts with their own Anthropic calls.
+
 - `beginClaudeSignIn(now?, { keepUntilCancelled? })` returns `{ url, attempt }` (claude.ai authorize URL with S256
   PKCE; the attempt expires after 20 minutes unless `keepUntilCancelled`, which lasts until the host drops it).
   `completeClaudeSignIn(tokenFetch, attempt, pasted, signal?)` parses `CODE#STATE`, a bare code or the whole callback
