@@ -289,3 +289,80 @@
 .byos-connect-remember-check input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: $accent; }
 .byos-connect-model-empty { margin: 0; padding: 12px; border: 1px dashed $line-strong; border-radius: $radius; color: $muted; font-size: 13px; line-height: 1.45; }
 .byos-signin-inline-privacy { border-top: 1px solid $line; }
+/* Settings-style list (layout="list"): grouped rows, switches, icon Back, lock note. */
+.byos-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.byos-list-group { display: grid; gap: 6px; min-width: 0; }
+.byos-list-heading { margin: 0; padding: 0 4px; color: $faint; font: 600 11px/1.4 $font; letter-spacing: .06em; text-transform: uppercase; }
+.byos-list { display: grid; min-width: 0; overflow: hidden; border: 1px solid $line; border-radius: $radius-lg; background: $surface-soft; }
+.byos-list > * + *, .byos-list > .byos-list-embed .byos-field + .byos-field, .byos-list > .byos-list-embed > * + * { border-top: 1px solid $line; }
+.byos-list-row { box-sizing: border-box; width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 12px; border: 0; border-radius: 0; background: transparent; color: $text; font: 500 14px/1.3 $font; text-align: left; text-decoration: none; }
+:is(button, a, label).byos-list-row { cursor: pointer; }
+:is(button, a, label).byos-list-row:hover { background: $secondary-hover; }
+.byos-list-row:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
+.byos-list-row-icon { flex: none; display: grid; }
+.byos-list-row-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.byos-list-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.byos-list-row-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $muted; font: 400 12px/1.35 $font; }
+.byos-list-row-value { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $muted; font-weight: 400; }
+.byos-list-row-chevron, .byos-list-row-check { flex: none; display: grid; color: $faint; }
+.byos-list-row-check { color: $accent; }
+.byos-list-row-selected .byos-provider-choice-name { font-weight: 600; }
+.byos-list-row-danger { justify-content: center; color: $danger; font-weight: 600; }
+.byos-list-row-danger .byos-list-row-text { flex: 0 1 auto; }
+.byos-list-row-accent { color: $accent; }
+.byos-list-row-error { margin: 0; padding: 0 12px 8px; color: $danger; font-size: 12px; }
+.byos-list-row-action { flex: none; min-height: 32px; padding: 0 12px; border: 0; border-radius: calc($radius-lg - 6px); background: $primary; color: $on-primary; font: 600 13px/1.2 $font; cursor: pointer; }
+.byos-list-row-action:hover { background: $primary-strong; }
+.byos-list-row-action:disabled { cursor: progress; opacity: .8; }
+.byos-list-row-action-slot { flex: none; display: flex; }
+.byos-list-row-action-slot .byos-signin-primary { width: auto; min-height: 32px; padding: 0 12px; }
+.byos-list-avatar { position: relative; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: $surface-raised; color: $text; font: 700 12px/1 $font; }
+.byos-list-avatar svg, .byos-list-avatar img { width: 18px; height: 18px; }
+.byos-list-avatar .byos-account-settings-dot { width: 9px; height: 9px; right: -2px; bottom: -2px; border-color: $surface-soft; }
+.byos-switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 999px; background: $line-strong; cursor: pointer; transition: background 150ms ease; }
+.byos-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform 150ms ease; }
+.byos-switch:checked { background: $accent; }
+.byos-switch:checked::after { transform: translateX(16px); }
+.byos-switch:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+.byos-switch:disabled { cursor: not-allowed; opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .byos-switch, .byos-switch::after { transition: none; } }
+.byos-list-nav { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: -8px; }
+.byos-list-nav-back { flex: none; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: $radius; background: transparent; color: $muted; cursor: pointer; }
+.byos-list-nav-back:hover { background: $secondary-hover; color: $text; }
+.byos-list-nav-back:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+.byos-list-nav h3 { min-width: 0; display: flex; align-items: baseline; gap: 8px; margin: 0; overflow: hidden; color: $text; font: 600 16px/1.3 $font; letter-spacing: 0; white-space: nowrap; }
+.byos-list-nav:not(:has(.byos-list-nav-back)) { margin-left: 0; }
+.byos-list-nav-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: $faint; font: 400 13px/1.3 $font; }
+.byos-lock-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: $faint; font: 400 12px/1.45 $font; }
+.byos-lock-note svg { flex: none; margin-top: 2px; }
+.byos-signin.byos-signin-list { gap: 14px; padding: 0; }
+.byos-signin-list p.byos-signin-lead { color: $muted; font-size: 13px; }
+.byos-signin-list .byos-lock-note { color: $faint; }
+.byos-signin-list .byos-signin-privacy-page { display: grid; gap: 10px; color: $muted; font-size: 13px; line-height: 1.55; }
+.byos-signin-list .byos-signin-privacy-page p { margin: 0; }
+.byos-signin-list .byos-signin-paste { gap: 8px; }
+.byos-signin-list .byos-signin-paste-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.byos-signin-list .byos-signin-paste-hint { color: $muted; font-size: 13px; }
+.byos-input-row { position: relative; display: flex; align-items: center; min-width: 0; }
+.byos-input-row > input { flex: 1 1 auto; }
+.byos-input-row:has(.byos-input-action) > input { padding-right: 48px; }
+.byos-input-action { position: absolute; right: 4px; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: calc($radius - 2px); background: $secondary-hover; color: $accent; cursor: pointer; }
+.byos-input-action:hover { background: $surface-raised; }
+.byos-input-action:focus-visible { outline: 2px solid $accent; outline-offset: 1px; }
+.byos-signin-text-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+.byos-text-button { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: $radius; background: transparent; color: $muted; font: 500 13px/1.3 $font; cursor: pointer; }
+.byos-text-button:hover { background: $secondary-hover; color: $text; }
+.byos-text-button:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+.byos-signin-list .byos-signin-progress { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.byos-provider-picker-list { display: grid; gap: 14px; }
+.byos-provider-picker-list .byos-provider-choice { min-height: 52px; border: 0; border-radius: 0; background: transparent; padding: 8px 12px; }
+.byos-provider-picker-list .byos-provider-choice:hover { background: $secondary-hover; }
+.byos-account-settings-list { display: grid; gap: 14px; }
+.byos-account-settings-list .byos-account-settings-status-row { min-height: 56px; }
+.byos-account-settings-list .byos-account-settings-status { font-size: 12px; }
+.byos-list-embed { min-width: 0; }
+.byos-list-embed > .byos-model-effort { display: grid; gap: 0; }
+.byos-account-settings-list .byos-field { min-height: 48px; padding: 0 4px 0 12px; border-radius: 0; }
+.byos-account-settings-list .byos-field:hover { background: $secondary-hover; }
+.byos-account-settings-list .byos-picker-stale { padding: 4px 12px; border-top: 1px solid $line; }
+.byos-list-embed > .byos-note { padding: 10px 12px; }

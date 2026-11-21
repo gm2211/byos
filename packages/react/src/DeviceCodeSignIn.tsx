@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ByosIcon } from './icons.js';
 import { ChatGPTMark } from './ChatGPTMark.js';
+import { LockNote, SettingsList, SettingsNav, SettingsRow, SettingsToggleRow } from './SettingsList.js';
 
 /**
  * Device-code subscription sign-in (Codex, Grok...): show a one-time code, send the user to the
@@ -149,6 +150,18 @@ export type DeviceCodeSignInProps = {
   /** Keep Help as a tab (default), or show it inside Sign in only while a code is pending or sign-in has failed. */
   helpMode?: 'tab' | 'contextual';
   className?: string;
+  /**
+   * 'list': a settings-style screen (overrides `compact`). A nav row with an icon Back button,
+   * one primary button, a lock note, then rows for Remember, any `alternatives`, and "How sign-in
+   * works", which drills into `privacyDetails`. While a code is pending: the code, one button to
+   * approve it, a status line and Cancel.
+   */
+  layout?: 'stacked' | 'list';
+  /** List layout: shows the icon-only Back button in the nav row. */
+  onBack?: () => void;
+  backLabel?: string;
+  /** List layout: other ways in, as drill-in rows (e.g. "Use an API key instead"). */
+  alternatives?: { label: ReactNode; onSelect: () => void }[];
 };
 
 export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
@@ -159,6 +172,7 @@ export function DeviceCodeSignIn(props: DeviceCodeSignInProps) {
   const pending = !connected && (status === 'pending' || exchanging);
   const title = connected ? s.connectedTitle : pending ? exchanging ? s.exchangingTitle : device ? s.codeTitle : s.preparingTitle : s.connectTitle;
   const body = connected ? available ? s.connectedBody : s.connectedUnavailableBody : pending ? exchanging ? s.exchangingBody : device ? s.codeBody : s.preparingBody : s.connectBody;
+  if (props.layout === 'list') return <ListDeviceCodeSignIn props={props} strings={s} pending={pending} exchanging={exchanging} available={available}/>;
   if (props.compact) return <CompactDeviceCodeSignIn props={props} strings={s} pending={pending} exchanging={exchanging} available={available} title={title} body={body}/>;
   return <div className={`byos byos-signin${props.className ? ` ${props.className}` : ''}`}>
     <header className="byos-signin-heading">
@@ -302,5 +316,56 @@ function CompactDeviceCodeSignIn({ props, strings, pending, exchanging, availabl
       </div>}
       {!inline && selectedTab === 'help' && <div className="byos-signin-compact-support" role="region" aria-label={strings.helpTab} tabIndex={0}><p>{strings.troubleBody}</p></div>}
     </div>
+  </div>;
+}
+
+function ListDeviceCodeSignIn({ props, strings, pending, exchanging, available }: {
+  props: DeviceCodeSignInProps;
+  strings: DeviceCodeSignInStrings;
+  pending: boolean;
+  exchanging: boolean;
+  available: boolean;
+}) {
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const back = props.backLabel ?? 'Back';
+  const cls = `byos byos-signin byos-signin-list${props.className ? ` ${props.className}` : ''}`;
+  if (privacyOpen && props.privacyDetails) return <div className={cls}>
+    <SettingsNav title={strings.privacySummary} onBack={() => setPrivacyOpen(false)} backLabel={back} headingId={props.headingId}/>
+    <div className="byos-signin-privacy-page">{props.privacyDetails}</div>
+  </div>;
+  const nav = <SettingsNav title={props.providerName} detail={props.showProviderIdentity === false ? undefined : strings.planName} onBack={props.onBack} backLabel={back} headingId={props.headingId}/>;
+  if (props.connected) return <div className={cls}>
+    {nav}
+    <SettingsList>
+      <SettingsRow label={strings.connectedStatus} trailing={<span className="byos-list-row-check"><ByosIcon name="check" size={16}/></span>}/>
+      <SettingsRow label={strings.disconnect} tone="danger" onClick={props.onDisconnect}/>
+    </SettingsList>
+  </div>;
+  if (pending) return <div className={cls}>
+    {nav}
+    {props.device && !exchanging && <>
+      <p className="byos-signin-lead">{strings.codeBody}</p>
+      <SignInCode key={props.device.deviceAuthId} code={props.device.userCode} strings={strings}/>
+      <a className="byos-signin-primary" href={props.device.verificationUriComplete} target={props.linkTarget ?? '_blank'} rel="noopener noreferrer">{strings.continueButton} <ByosIcon name="external"/></a>
+    </>}
+    <div className="byos-signin-progress">
+      <p role="status"><span className="byos-signin-dot" aria-hidden="true"/>{exchanging ? strings.completing : props.device ? strings.waiting : strings.starting}</p>
+      <button className="byos-text-button" type="button" onClick={props.onCancel}>{strings.cancel}</button>
+    </div>
+  </div>;
+  return <div className={cls}>
+    {nav}
+    {!available && <p className="byos-signin-unavailable" role="status">{strings.unavailable}</p>}
+    {props.error && <p className="byos-signin-error" role="alert">{props.error}</p>}
+    <button className="byos-signin-primary" type="button" disabled={!available} onClick={props.onStart}>
+      <span>{!available ? strings.unavailableButton : props.status === 'error' ? strings.retryButton : strings.connectButton}</span>
+      {available && <ByosIcon name="external"/>}
+    </button>
+    {props.disclosure && <LockNote>{props.disclosure}</LockNote>}
+    {(props.remember || props.alternatives?.length || props.privacyDetails) && <SettingsList label={strings.privacySummary}>
+      {props.remember && <SettingsToggleRow label={strings.remember} checked={props.remember.checked} onChange={props.remember.onChange} error={props.remember.error}/>}
+      {props.alternatives?.map((alt, i) => <SettingsRow key={i} label={alt.label} onClick={alt.onSelect}/>)}
+      {props.privacyDetails && <SettingsRow label={strings.privacySummary} onClick={() => setPrivacyOpen(true)}/>}
+    </SettingsList>}
   </div>;
 }

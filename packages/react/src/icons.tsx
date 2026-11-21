@@ -12,6 +12,10 @@ const PATHS = {
   alert: <><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></>,
   plug: <><path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></>,
   refresh: <><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/></>,
+  'chevron-right': <path d="m9 6 6 6-6 6"/>,
+  'chevron-left': <path d="m15 6-6 6 6 6"/>,
+  lock: <><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></>,
+  paste: <><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"/></>,
   cloud: <path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>,
 };
 

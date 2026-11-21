@@ -1,5 +1,6 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ByosIcon, type ByosIconName } from './icons.js';
+import { ProviderAvatar, SettingsList, SettingsRow, SettingsToggleRow } from './SettingsList.js';
 
 export type AiAccountSettingsTab = 'model' | 'account' | 'tools';
 
@@ -15,6 +16,12 @@ export type AiAccountSettingsStrings = {
   signedOutStatus: string;
   reconnect: string;
   reconnecting: string;
+  /** List layout: the drill-in row that goes back to the provider list. */
+  switchProvider: string;
+  /** List layout: the red Disconnect row. */
+  disconnect: string;
+  /** List layout: the Remember switch. */
+  remember: string;
   /** @deprecated The expired banner now always says `reconnect`; kept so existing string overrides still type-check. */
   openAccountTab: string;
 };
@@ -32,6 +39,9 @@ export const defaultAiAccountSettingsStrings: AiAccountSettingsStrings = {
   reconnect: 'Reconnect',
   reconnecting: 'Connecting…',
   openAccountTab: 'Account',
+  switchProvider: 'Switch AI',
+  disconnect: 'Disconnect',
+  remember: 'Remember on this browser',
 };
 
 const TAB_ICONS: Record<AiAccountSettingsTab, ByosIconName> = { model: 'sliders', account: 'key', tools: 'tool' };
@@ -60,9 +70,58 @@ export type AiAccountSettingsProps = {
   className?: string;
   /** Preserve host-owned sign-in/download state while inactive panes stay hidden. */
   keepPanelsMounted?: boolean;
+  /**
+   * 'tabs' (default): Model / Account (/ Tools) tabs under the provider header. 'list': one
+   * settings-style screen with no tabs. Group one is the provider status row (with an inline
+   * Reconnect when expired) and the model settings; group two is Remember, `accountSettings` and
+   * Switch AI; then a red Disconnect row, then `toolsSettings`.
+   */
+  layout?: 'tabs' | 'list';
+  /** List layout: the Remember switch (where the sign-in is kept). */
+  remember?: { checked: boolean; onChange: (checked: boolean) => void; error?: string };
+  /** List layout: the red Disconnect row. */
+  onDisconnect?: () => void;
 };
 
 export function AiAccountSettings(props: AiAccountSettingsProps) {
+  if (props.layout === 'list') return <ListAccountSettings {...props}/>;
+  return <TabbedAccountSettings {...props}/>;
+}
+
+function ListAccountSettings(props: AiAccountSettingsProps) {
+  const generatedId = useId();
+  const headingId = props.headingId ?? `${generatedId}-heading`;
+  const strings = { ...defaultAiAccountSettingsStrings, ...props.strings };
+  const state = props.expired ? 'expired' : props.signedIn === false ? 'signed-out' : 'connected';
+  const statusText = state === 'expired' ? strings.expiredStatus : state === 'signed-out' ? strings.signedOutStatus : strings.connectedStatus;
+  const reconnect = state === 'expired'
+    ? props.onReconnect
+      ? <button type="button" className="byos-list-row-action" disabled={props.reconnecting} aria-busy={props.reconnecting || undefined} onClick={props.onReconnect}>{props.reconnecting ? strings.reconnecting : strings.reconnect}</button>
+      : props.recoveryAction != null ? <span className="byos-list-row-action-slot">{props.recoveryAction}</span> : undefined
+    : undefined;
+  return <section className={`byos byos-account-settings byos-account-settings-list${props.className ? ` ${props.className}` : ''}`} aria-labelledby={headingId}>
+    <h2 id={headingId} tabIndex={-1} className="byos-visually-hidden">{strings.heading}</h2>
+    <SettingsList label={props.providerName}>
+      <SettingsRow className={`byos-account-settings-status-row byos-account-settings-status-row-${state}`}
+        icon={<ProviderAvatar name={props.providerName} icon={props.providerIcon} state={state}/>}
+        label={props.providerName}
+        detail={<span className={`byos-account-settings-status byos-account-settings-status-${state}`} role={state === 'expired' ? 'status' : undefined}>{statusText}</span>}
+        trailing={reconnect ?? null}/>
+      <div className="byos-list-embed">{props.modelSettings}</div>
+    </SettingsList>
+    <SettingsList label={strings.accountTab}>
+      {props.remember && <SettingsToggleRow label={strings.remember} checked={props.remember.checked} onChange={props.remember.onChange} error={props.remember.error}/>}
+      {props.accountSettings != null && <div className="byos-list-embed">{props.accountSettings}</div>}
+      <SettingsRow label={strings.switchProvider} onClick={props.onChangeProvider}/>
+    </SettingsList>
+    {props.onDisconnect && <SettingsList label={strings.disconnect}>
+      <SettingsRow label={strings.disconnect} tone="danger" onClick={props.onDisconnect}/>
+    </SettingsList>}
+    {props.toolsSettings != null && <SettingsList heading={strings.toolsTab}><div className="byos-list-embed">{props.toolsSettings}</div></SettingsList>}
+  </section>;
+}
+
+function TabbedAccountSettings(props: AiAccountSettingsProps) {
   const generatedId = useId();
   const headingId = props.headingId ?? `${generatedId}-heading`;
   const signedOut = props.signedIn === false;

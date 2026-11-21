@@ -574,3 +574,70 @@ test('ModelEffortPicker names a model whose label is just its id, and keeps real
   assert.match(html, /<li>House Model<\/li>/);
   assert.doesNotMatch(html, /<li>grok-4-fast<\/li>/);
 });
+
+test('AiProviderPicker list layout groups rows under headings with descriptions and marks the choice', () => {
+  const html = renderToStaticMarkup(createElement(AiProviderPicker, {
+    layout: 'list', selectedId: 'b', onSelect: () => undefined,
+    groups: [{ id: 'plan', label: 'Use your plan' }, { id: 'key', label: 'Use an API key' }],
+    providers: [{ id: 'a', name: 'Acme', description: 'Pro plan', group: 'plan' }, { id: 'b', name: 'Beta', group: 'key' }, { id: 'c', name: 'Loose' }],
+  }));
+  assert.match(html, /aria-label="Choose an AI service"/);
+  assert.ok(html.indexOf('Use your plan') < html.indexOf('Acme') && html.indexOf('Acme') < html.indexOf('Use an API key') && html.indexOf('Beta') < html.indexOf('Loose'));
+  assert.match(html, /Pro plan/);
+  assert.match(html, /aria-pressed="true"[^>]*>[\s\S]*Beta[\s\S]*Selected/);
+  assert.doesNotMatch(html, /<details/);
+});
+
+test('PasteCodeSignIn list layout: icon Back, one button, lock note, switch and drill-in rows, no boxes or expanders', () => {
+  const html = renderToStaticMarkup(createElement(PasteCodeSignIn, {
+    providerName: 'Acme', layout: 'list', status: 'idle', code: '', onCodeChange: () => undefined,
+    onStart: () => undefined, onSubmit: () => undefined, onCancel: () => undefined, onBack: () => undefined,
+    disclosure: 'Acme handles sign-in.', privacyDetails: createElement('p', null, 'Long privacy'),
+    remember: { checked: true, onChange: () => undefined }, alternatives: [{ label: 'Use an API key instead', onSelect: () => undefined }],
+    strings: { planName: 'Pro plan' },
+  }));
+  assert.match(html, /aria-label="Back"/);
+  assert.match(html, /<h3>Acme<span class="byos-list-nav-detail">Pro plan<\/span><\/h3>/);
+  assert.equal((html.match(/Acme/g) ?? []).length, 3); // nav, button, lock note
+  assert.match(html, /byos-lock-note/);
+  assert.match(html, /role="switch"[^>]*checked=""/);
+  assert.match(html, /Use an API key instead/);
+  assert.match(html, /How sign-in and privacy work/);
+  assert.doesNotMatch(html, /<details|byos-signin-disclosure|Long privacy|Use the subscription/);
+});
+
+test('PasteCodeSignIn list layout pasting: step detail, inline icon paste button, text actions', () => {
+  const html = renderToStaticMarkup(createElement(PasteCodeSignIn, {
+    providerName: 'Acme', layout: 'list', status: 'error', error: 'Wrong address', code: '', onCodeChange: () => undefined,
+    onStart: () => undefined, onSubmit: () => undefined, onCancel: () => undefined, onPasteFromClipboard: () => undefined,
+  }));
+  assert.match(html, /Step 2 of 2/);
+  assert.match(html, /class="byos-input-action" aria-label="Paste and connect"/);
+  assert.match(html, /role="alert"[^>]*>Wrong address/);
+  assert.match(html, /type="submit" disabled=""/);
+  assert.match(html, /Open Acme again/);
+});
+
+test('DeviceCodeSignIn list layout shows nav, button, rows; pending shows the code and cancel', () => {
+  const base = { providerName: 'Acme', layout: 'list', device: null, connected: false, onStart: () => undefined, onCancel: () => undefined, onDisconnect: () => undefined, onBack: () => undefined, remember: { checked: false, onChange: () => undefined }, privacyDetails: createElement('p', null, 'Long') };
+  const idle = renderToStaticMarkup(createElement(DeviceCodeSignIn, { ...base, status: 'idle' } as never));
+  assert.match(idle, /aria-label="Back"/);
+  assert.match(idle, /role="switch"/);
+  assert.doesNotMatch(idle, /role="tablist"|<details/);
+  const pending = renderToStaticMarkup(createElement(DeviceCodeSignIn, { ...base, status: 'pending', device: { deviceAuthId: 'd', userCode: 'ABCD-1234', verificationUriComplete: 'https://example.test' } } as never));
+  assert.match(pending, /ABCD-1234/);
+  assert.match(pending, /Cancel sign-in/);
+});
+
+test('AiAccountSettings list layout: no tabs, status row with inline Reconnect, Remember switch, Switch AI and Disconnect rows', () => {
+  const html = renderToStaticMarkup(createElement(AiAccountSettings, {
+    layout: 'list', providerName: 'Acme', expired: true, onReconnect: () => undefined, onChangeProvider: () => undefined,
+    onDisconnect: () => undefined, remember: { checked: true, onChange: () => undefined },
+    modelSettings: createElement('p', null, 'Model rows'), accountSettings: null,
+  }));
+  assert.doesNotMatch(html, /role="tablist"/);
+  assert.match(html, /Sign-in expired/);
+  assert.match(html, /byos-list-row-action[^>]*>Reconnect/);
+  assert.match(html, /role="switch"/);
+  assert.ok(html.indexOf('Model rows') < html.indexOf('Remember on this browser') && html.indexOf('Switch AI') < html.indexOf('>Disconnect<'));
+});
